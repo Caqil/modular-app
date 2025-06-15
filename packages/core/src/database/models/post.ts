@@ -8,37 +8,29 @@ export interface IPost extends Document {
   content: string;
   excerpt?: string;
   status: ContentStatus;
-  type: ContentType;
+  type: ContentType.POST;
   author: Types.ObjectId;
   featuredImage?: string;
-  gallery?: string[];
+  gallery: string[];
   meta: {
     seoTitle?: string;
     seoDescription?: string;
-    seoKeywords?: string[];
-    canonicalUrl?: string;
-    ogTitle?: string;
-    ogDescription?: string;
-    ogImage?: string;
-    twitterTitle?: string;
-    twitterDescription?: string;
-    twitterImage?: string;
-    allowComments?: boolean;
-    isPinned?: boolean;
-    isSticky?: boolean;
-    viewCount?: number;
-    shareCount?: number;
-    likeCount?: number;
-    commentCount?: number;
-    readingTime?: number;
-    customCss?: string;
-    customJs?: string;
+    seoKeywords: string[];
+    allowComments: boolean;
+    isPinned: boolean;
+    isSticky: boolean;
+    isFeatured: boolean;
+    viewCount: number;
+    shareCount: number;
+    likeCount: number;
+    commentCount: number;
+    readingTime: number;
   };
   categories: Types.ObjectId[];
   tags: string[];
   customFields: Map<string, any>;
-  publishedAt?: Date | undefined;
-  scheduledAt?: Date | undefined;
+  publishedAt?: Date;
+  scheduledAt?: Date;
   lastModifiedBy?: Types.ObjectId;
   revisions: Array<{
     content: string;
@@ -98,9 +90,9 @@ const PostSchema = new Schema<IPost>({
   },
   type: {
     type: String,
-    enum: Object.values(ContentType),
+    enum: [ContentType.POST],
     default: ContentType.POST,
-    index: true,
+    immutable: true,
   },
   author: {
     type: Schema.Types.ObjectId,
@@ -135,50 +127,13 @@ const PostSchema = new Schema<IPost>({
     },
     seoKeywords: {
       type: [String],
+      default: [],
       validate: {
         validator: function(keywords: string[]) {
           return keywords.length <= 10;
         },
         message: 'Maximum 10 SEO keywords allowed',
       },
-    },
-    canonicalUrl: {
-      type: String,
-      trim: true,
-      validate: {
-        validator: function(v: string) {
-          return !v || /^https?:\/\/.+/.test(v);
-        },
-        message: 'Invalid canonical URL format',
-      },
-    },
-    ogTitle: {
-      type: String,
-      trim: true,
-      maxlength: 60,
-    },
-    ogDescription: {
-      type: String,
-      trim: true,
-      maxlength: 160,
-    },
-    ogImage: {
-      type: String,
-      trim: true,
-    },
-    twitterTitle: {
-      type: String,
-      trim: true,
-      maxlength: 60,
-    },
-    twitterDescription: {
-      type: String,
-      trim: true,
-      maxlength: 160,
-    },
-    twitterImage: {
-      type: String,
-      trim: true,
     },
     allowComments: {
       type: Boolean,
@@ -190,6 +145,11 @@ const PostSchema = new Schema<IPost>({
       index: true,
     },
     isSticky: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    isFeatured: {
       type: Boolean,
       default: false,
       index: true,
@@ -217,14 +177,7 @@ const PostSchema = new Schema<IPost>({
     readingTime: {
       type: Number,
       min: 0,
-    },
-    customCss: {
-      type: String,
-      trim: true,
-    },
-    customJs: {
-      type: String,
-      trim: true,
+      default: 0,
     },
   },
   categories: [{
@@ -285,7 +238,7 @@ const PostSchema = new Schema<IPost>({
     default: [],
     validate: {
       validator: function(revisions: any[]) {
-        return revisions.length <= 50; // Keep max 50 revisions
+        return revisions.length <= 50;
       },
       message: 'Too many revisions (maximum 50)',
     },
@@ -330,26 +283,20 @@ const PostSchema = new Schema<IPost>({
 // Indexes
 PostSchema.index({ slug: 1 }, { unique: true });
 PostSchema.index({ status: 1, publishedAt: -1 });
-PostSchema.index({ type: 1, status: 1 });
 PostSchema.index({ author: 1, createdAt: -1 });
 PostSchema.index({ categories: 1, publishedAt: -1 });
 PostSchema.index({ tags: 1, publishedAt: -1 });
 PostSchema.index({ 'meta.isPinned': 1, publishedAt: -1 });
-PostSchema.index({ 'meta.isSticky': 1, publishedAt: -1 });
+PostSchema.index({ 'meta.isFeatured': 1, publishedAt: -1 });
 PostSchema.index({ scheduledAt: 1, status: 1 });
 
-// Text index for search
+// Text search index
 PostSchema.index({
   title: 'text',
   content: 'text',
   excerpt: 'text',
   tags: 'text',
 });
-
-// Compound indexes for common queries
-PostSchema.index({ status: 1, type: 1, publishedAt: -1 });
-PostSchema.index({ author: 1, status: 1, createdAt: -1 });
-PostSchema.index({ categories: 1, status: 1, publishedAt: -1 });
 
 // Virtual properties
 PostSchema.virtual('url').get(function() {
@@ -371,7 +318,6 @@ PostSchema.virtual('isScheduled').get(function() {
 
 PostSchema.virtual('wordCount').get(function() {
   if (!this.content) return 0;
-  // Remove HTML tags and count words
   const plainText = this.content.replace(/<[^>]*>/g, '');
   return plainText.trim().split(/\s+/).length;
 });
@@ -382,24 +328,9 @@ PostSchema.virtual('estimatedReadingTime').get(function() {
   return Math.ceil(words / wordsPerMinute);
 });
 
-PostSchema.virtual('isPopular').get(function() {
-  return (this.meta.viewCount || 0) > 1000 || (this.meta.likeCount || 0) > 50;
-});
-
-PostSchema.virtual('engagementRate').get(function() {
-  const views = this.meta.viewCount || 0;
-  const likes = this.meta.likeCount || 0;
-  const shares = this.meta.shareCount || 0;
-  const comments = this.meta.commentCount || 0;
-  
-  if (views === 0) return 0;
-  return ((likes + shares + comments) / views) * 100;
-});
-
 // Instance methods
 PostSchema.methods.incrementViewCount = function() {
-  if (!this.meta.viewCount) this.meta.viewCount = 0;
-  this.meta.viewCount += 1;
+  this.meta.viewCount = (this.meta.viewCount || 0) + 1;
   return this.save();
 };
 
@@ -448,33 +379,19 @@ PostSchema.methods.createRevision = function(
   modifiedBy: Types.ObjectId,
   changeNote?: string
 ) {
-  // Add new revision
   this.revisions.push({
-    content: this.content, // Save current content as revision
+    content: this.content,
     modifiedBy,
     modifiedAt: new Date(),
     changeNote,
   });
   
-  // Keep only last 50 revisions
   if (this.revisions.length > 50) {
     this.revisions = this.revisions.slice(-50);
   }
   
-  // Update content
   this.content = content;
   this.lastModifiedBy = modifiedBy;
-  
-  return this.save();
-};
-
-PostSchema.methods.revertToRevision = function(revisionIndex: number) {
-  if (revisionIndex < 0 || revisionIndex >= this.revisions.length) {
-    throw new Error('Invalid revision index');
-  }
-  
-  const revision = this.revisions[revisionIndex];
-  this.content = revision.content;
   
   return this.save();
 };
@@ -503,18 +420,6 @@ PostSchema.methods.addTag = function(tag: string) {
 
 PostSchema.methods.removeTag = function(tag: string) {
   this.tags = this.tags.filter(t => t !== tag.toLowerCase().trim());
-  return this;
-};
-
-PostSchema.methods.addToGallery = function(imageUrl: string) {
-  if (!this.gallery.includes(imageUrl) && this.gallery.length < 20) {
-    this.gallery.push(imageUrl);
-  }
-  return this;
-};
-
-PostSchema.methods.removeFromGallery = function(imageUrl: string) {
-  this.gallery = this.gallery.filter(url => url !== imageUrl);
   return this;
 };
 
@@ -549,9 +454,18 @@ PostSchema.statics.findByAuthor = function(authorId: Types.ObjectId) {
 
 PostSchema.statics.findScheduled = function() {
   return this.find({
-    scheduledAt: { $gt: new Date() },
+    scheduledAt: { $lte: new Date() },
     status: ContentStatus.DRAFT,
   }).sort({ scheduledAt: 1 });
+};
+
+PostSchema.statics.findFeatured = function(limit = 5) {
+  return this.find({
+    'meta.isFeatured': true,
+    status: ContentStatus.PUBLISHED,
+  })
+  .sort({ 'meta.isPinned': -1, publishedAt: -1 })
+  .limit(limit);
 };
 
 PostSchema.statics.findPopular = function(limit = 10) {
@@ -560,35 +474,6 @@ PostSchema.statics.findPopular = function(limit = 10) {
   })
   .sort({ 'meta.viewCount': -1, 'meta.likeCount': -1 })
   .limit(limit);
-};
-
-PostSchema.statics.findTrending = function(days = 7, limit = 10) {
-  const dateThreshold = new Date();
-  dateThreshold.setDate(dateThreshold.getDate() - days);
-  
-  return this.find({
-    status: ContentStatus.PUBLISHED,
-    publishedAt: { $gte: dateThreshold },
-  })
-  .sort({ 'meta.viewCount': -1, 'meta.shareCount': -1 })
-  .limit(limit);
-};
-
-PostSchema.statics.findRelated = function(postId: Types.ObjectId, limit = 5) {
-  return this.findById(postId).then(post => {
-    if (!post) return [];
-    
-    return this.find({
-      _id: { $ne: postId },
-      status: ContentStatus.PUBLISHED,
-      $or: [
-        { categories: { $in: post.categories } },
-        { tags: { $in: post.tags } },
-      ],
-    })
-    .sort({ publishedAt: -1 })
-    .limit(limit);
-  });
 };
 
 PostSchema.statics.searchPosts = function(query: string) {
@@ -612,22 +497,6 @@ PostSchema.statics.getStats = function() {
   ]);
 };
 
-PostSchema.statics.getEngagementStats = function() {
-  return this.aggregate([
-    {
-      $group: {
-        _id: null,
-        totalViews: { $sum: '$meta.viewCount' },
-        totalLikes: { $sum: '$meta.likeCount' },
-        totalShares: { $sum: '$meta.shareCount' },
-        totalComments: { $sum: '$meta.commentCount' },
-        avgViews: { $avg: '$meta.viewCount' },
-        avgLikes: { $avg: '$meta.likeCount' },
-      },
-    },
-  ]);
-};
-
 // Pre-save middleware
 PostSchema.pre('save', async function(next) {
   try {
@@ -635,7 +504,6 @@ PostSchema.pre('save', async function(next) {
     if (!this.slug || this.isModified('title')) {
       const baseSlug = SlugGenerator.forContent(this.title);
       
-      // Check for uniqueness
       let slug = baseSlug;
       let counter = 1;
       
@@ -681,7 +549,6 @@ PostSchema.pre('save', async function(next) {
         .filter((tag: string) => tag.length > 0 && tag.length <= 50)
         .slice(0, 20);
       
-      // Remove duplicates
       this.tags = [...new Set(this.tags)];
     }
 
@@ -702,11 +569,6 @@ PostSchema.pre('save', async function(next) {
 
 // Post-save middleware
 PostSchema.post('save', async function(doc) {
-  // Update category post counts
-  if (doc.isModified('categories') || doc.isModified('status')) {
-    // TODO: Update category document counts
-  }
-  
   // Handle scheduled posts
   if (doc.scheduledAt && doc.scheduledAt <= new Date() && doc.status === ContentStatus.DRAFT) {
     doc.status = ContentStatus.PUBLISHED;
@@ -719,7 +581,6 @@ PostSchema.post('save', async function(doc) {
 // Pre-remove middleware
 PostSchema.pre('deleteOne', { document: true, query: false }, async function(next) {
   try {
-    // TODO: Clean up related data (comments, media references, etc.)
     console.log(`Deleting post: ${this.title}`);
     next();
   } catch (error) {

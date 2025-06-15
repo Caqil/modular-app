@@ -51,55 +51,72 @@ export class EventEmitter {
     }
   }
 
-  /**
-   * Add event listener
-   */
-  public on(
-    eventType: string,
-    callback: EventCallback,
-    options: EventListenerOptions = {},
-    plugin?: string
-  ): string {
-    const listenerId = uuidv4();
-    
-    const listener: EventListener = {
-      id: listenerId,
-      callback,
-      options: {
-        priority: 10,
-        timeout: this.config.defaultTimeout,
-        ...options,
-      },
-      plugin,
-      addedAt: new Date(),
-    };
+  // Fix for the plugin property assignment in event-emitter.ts
 
-    // Add to listeners map
-    if (!this.listeners.has(eventType)) {
-      this.listeners.set(eventType, []);
-    }
+/**
+ * Add event listener
+ */
+public on(
+  eventType: string,
+  callback: EventCallback,
+  options: EventListenerOptions = {},
+  plugin?: string
+): string {
+  const listenerId = uuidv4();
+  
+  // Fix: Conditionally include plugin property only when defined
+  const listener: EventListener = {
+    id: listenerId,
+    callback,
+    options: {
+      priority: 10,
+      timeout: this.config.defaultTimeout,
+      ...options,
+    },
+    addedAt: new Date(),
+    // Only include plugin property if it's defined
+    ...(plugin !== undefined && { plugin }),
+  };
 
-    const eventListeners = this.listeners.get(eventType)!;
-    eventListeners.push(listener);
+  // Alternative approach - explicitly handle undefined:
+  // const listener: EventListener = {
+  //   id: listenerId,
+  //   callback,
+  //   options: {
+  //     priority: 10,
+  //     timeout: this.config.defaultTimeout,
+  //     ...options,
+  //   },
+  //   plugin: plugin, // This will be undefined if not provided
+  //   addedAt: new Date(),
+  // };
 
-    // Sort by priority (lower numbers = higher priority)
-    eventListeners.sort((a, b) => (a.options.priority || 10) - (b.options.priority || 10));
-
-    // Add to Node.js EventEmitter for compatibility
-    this.nodeEmitter.on(eventType, callback);
-
-    // Update stats
-    this.stats.totalListeners++;
-    this.stats.listenersByType[eventType] = (this.stats.listenersByType[eventType] || 0) + 1;
-
-    this.logger.debug(`Event listener added: ${eventType}`, {
-      listenerId,
-      plugin,
-      priority: listener.options.priority,
-    });
-
-    return listenerId;
+  // Add to listeners map
+  if (!this.listeners.has(eventType)) {
+    this.listeners.set(eventType, []);
   }
+
+  const eventListeners = this.listeners.get(eventType)!;
+  eventListeners.push(listener);
+
+  // Sort by priority (lower numbers = higher priority)
+  eventListeners.sort((a, b) => (a.options.priority || 10) - (b.options.priority || 10));
+
+  // Add to Node.js EventEmitter for compatibility
+  this.nodeEmitter.on(eventType, callback);
+
+  // Update stats
+  this.stats.totalListeners++;
+  this.stats.listenersByType[eventType] = (this.stats.listenersByType[eventType] || 0) + 1;
+
+  this.logger.debug(`Event listener added: ${eventType}`, {
+    listenerId,
+    plugin,
+    priority: listener.options.priority,
+  });
+
+  return listenerId;
+}
 
   /**
    * Add one-time event listener
@@ -113,7 +130,7 @@ export class EventEmitter {
     return this.on(eventType, callback, { ...options, once: true }, plugin);
   }
 
-  /**
+/**
    * Remove event listener
    */
   public off(eventType: string, listenerId: string): boolean {
@@ -124,6 +141,8 @@ export class EventEmitter {
     if (index === -1) return false;
 
     const listener = eventListeners[index];
+    if (!listener) return false; // Additional safety check
+
     eventListeners.splice(index, 1);
 
     // Remove from Node.js EventEmitter
@@ -524,7 +543,7 @@ export class EventEmitter {
    * Update configuration
    */
   public updateConfig(config: Partial<EventEmitterConfig>): void {
-    this.config = { ...this.config, ...config };
+    Object.assign(this.config, config);
     this.nodeEmitter.setMaxListeners(this.config.maxListeners);
   }
 

@@ -33,7 +33,10 @@ export class Sanitizer {
 
     const config = {
       ALLOWED_TAGS: options.allowedTags || this.DEFAULT_ALLOWED_TAGS,
-      ALLOWED_ATTR: options.allowedAttributes || this.DEFAULT_ALLOWED_ATTRIBUTES,
+      ALLOWED_ATTR: Object.keys(options.allowedAttributes || this.DEFAULT_ALLOWED_ATTRIBUTES).reduce<string[]>(
+        (attrs, tag) => attrs.concat((options.allowedAttributes || this.DEFAULT_ALLOWED_ATTRIBUTES)[tag]), 
+        []
+      ),
       KEEP_CONTENT: true,
       ALLOW_DATA_ATTR: false,
       ALLOW_UNKNOWN_PROTOCOLS: false,
