@@ -1,0 +1,1 @@
+export default function tags() { return <div>tags</div> }

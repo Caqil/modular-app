@@ -1,0 +1,1 @@
+export default function file-upload() { return <div>file-upload</div> }

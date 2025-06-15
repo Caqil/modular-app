@@ -1,0 +1,1 @@
+export default function empty-state() { return <div>empty-state</div> }

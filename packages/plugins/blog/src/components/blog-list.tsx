@@ -1,0 +1,1 @@
+export default function blog-list() { return <div>blog-list</div> }

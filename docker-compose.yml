@@ -1,0 +1,46 @@
+version: "3.8"
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: modular-app-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: modular-app
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./docker/mongodb/init.js:/docker-entrypoint-initdb.d/init.js
+
+  redis:
+    image: redis:7-alpine
+    container_name: modular-app-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: modular-app-app
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+      - redis
+    environment:
+      MONGODB_URI: mongodb://root:password@mongodb:27017/modular-app?authSource=admin
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./public/uploads:/app/public/uploads
+
+volumes:
+  mongodb_data:
+  redis_data:

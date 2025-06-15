@@ -1,0 +1,1 @@
+export default function submissions() { return <div>submissions</div> }

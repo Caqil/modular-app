@@ -1,0 +1,1 @@
+export default function related-posts() { return <div>related-posts</div> }

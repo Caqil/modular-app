@@ -1,0 +1,43 @@
+{
+  "name": "@modular-app/core",
+  "version": "0.1.0",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "lint": "eslint \"src/**/*.ts*\"",
+    "lint:fix": "eslint \"src/**/*.ts*\" --fix",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "format": "prettier --write \"src/**/*.{ts,js,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,js,json}\""
+  },
+  "dependencies": {
+    "mongoose": "^8.0.3",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "zod": "^3.22.4",
+    "slugify": "^1.6.6",
+    "winston": "^3.11.0",
+    "redis": "^4.6.12",
+    "mime-types": "^2.1.35",
+    "sharp": "^0.33.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/mime-types": "^2.1.4",
+    "@modular-app/config": "*",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  }
+}

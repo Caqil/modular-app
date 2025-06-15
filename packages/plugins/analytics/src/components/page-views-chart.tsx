@@ -1,0 +1,1 @@
+export default function page-views-chart() { return <div>page-views-chart</div> }

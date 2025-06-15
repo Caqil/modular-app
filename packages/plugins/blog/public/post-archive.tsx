@@ -1,0 +1,1 @@
+export default function post-archive() { return <div>post-archive</div> }

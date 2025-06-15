@@ -1,0 +1,1 @@
+export default function testimonials() { return <div>testimonials</div> }

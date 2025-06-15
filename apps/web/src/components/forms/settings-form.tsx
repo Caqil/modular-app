@@ -1,0 +1,1 @@
+export default function settings-form() { return <div>settings-form</div> }

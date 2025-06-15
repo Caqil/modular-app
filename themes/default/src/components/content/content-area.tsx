@@ -1,0 +1,1 @@
+export default function content-area() { return <div>content-area</div> }

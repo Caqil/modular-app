@@ -1,0 +1,1 @@
+export default function sitemap-generator() { return <div>sitemap-generator</div> }

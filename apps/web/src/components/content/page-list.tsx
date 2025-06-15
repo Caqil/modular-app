@@ -1,0 +1,1 @@
+export default function page-list() { return <div>page-list</div> }

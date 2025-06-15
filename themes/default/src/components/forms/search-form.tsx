@@ -1,0 +1,1 @@
+export default function search-form() { return <div>search-form</div> }

@@ -1,0 +1,1 @@
+export default function comment-form() { return <div>comment-form</div> }

@@ -1,0 +1,1 @@
+export default function tax-settings() { return <div>tax-settings</div> }

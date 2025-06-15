@@ -1,0 +1,1 @@
+export default function theme-wrapper() { return <div>theme-wrapper</div> }

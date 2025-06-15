@@ -1,0 +1,1 @@
+export default function page-single() { return <div>page-single</div> }

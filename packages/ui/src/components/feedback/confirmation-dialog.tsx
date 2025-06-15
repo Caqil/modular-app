@@ -1,0 +1,1 @@
+export default function confirmation-dialog() { return <div>confirmation-dialog</div> }

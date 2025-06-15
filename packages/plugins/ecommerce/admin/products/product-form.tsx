@@ -1,0 +1,1 @@
+export default function product-form() { return <div>product-form</div> }

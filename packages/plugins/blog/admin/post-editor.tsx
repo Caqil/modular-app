@@ -1,0 +1,1 @@
+export default function post-editor() { return <div>post-editor</div> }

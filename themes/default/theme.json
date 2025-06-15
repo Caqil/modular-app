@@ -1,0 +1,111 @@
+{
+  "name": "default",
+  "version": "1.0.0",
+  "title": "Default Theme",
+  "description": "Clean and minimal default theme for My CMS",
+  "author": "My CMS Team",
+  "license": "MIT",
+  "screenshot": "screenshot.png",
+  "tags": ["minimal", "clean", "responsive"],
+  "supports": [
+    "custom-logo",
+    "custom-colors",
+    "custom-fonts",
+    "menus",
+    "widgets",
+    "post-thumbnails"
+  ],
+  "templates": {
+    "home": {
+      "title": "Homepage",
+      "description": "Main homepage template",
+      "file": "home.tsx"
+    },
+    "single": {
+      "title": "Single Post",
+      "description": "Single post template",
+      "file": "single.tsx"
+    },
+    "archive": {
+      "title": "Archive",
+      "description": "Archive page template",
+      "file": "archive.tsx"
+    },
+    "page": {
+      "title": "Page",
+      "description": "Static page template",
+      "file": "page.tsx"
+    }
+  },
+  "customizer": {
+    "sections": [
+      {
+        "id": "colors",
+        "title": "Colors",
+        "settings": [
+          {
+            "id": "primary_color",
+            "type": "color",
+            "label": "Primary Color",
+            "default": "#3b82f6"
+          },
+          {
+            "id": "secondary_color",
+            "type": "color",
+            "label": "Secondary Color",
+            "default": "#64748b"
+          }
+        ]
+      },
+      {
+        "id": "typography",
+        "title": "Typography",
+        "settings": [
+          {
+            "id": "font_family",
+            "type": "select",
+            "label": "Font Family",
+            "choices": {
+              "inter": "Inter",
+              "roboto": "Roboto",
+              "open-sans": "Open Sans"
+            },
+            "default": "inter"
+          },
+          {
+            "id": "font_size",
+            "type": "range",
+            "label": "Base Font Size",
+            "min": 14,
+            "max": 20,
+            "default": 16
+          }
+        ]
+      }
+    ]
+  },
+  "menus": [
+    {
+      "id": "primary",
+      "title": "Primary Menu",
+      "description": "Main navigation menu"
+    },
+    {
+      "id": "footer",
+      "title": "Footer Menu",
+      "description": "Footer navigation menu"
+    }
+  ],
+  "widgetAreas": [
+    {
+      "id": "sidebar",
+      "title": "Sidebar",
+      "description": "Main sidebar widget area"
+    },
+    {
+      "id": "footer",
+      "title": "Footer",
+      "description": "Footer widget area"
+    }
+  ]
+}

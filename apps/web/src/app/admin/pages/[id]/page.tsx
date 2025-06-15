@@ -1,0 +1,1 @@
+export default function PageDetails() { return <div>Page Details</div> }

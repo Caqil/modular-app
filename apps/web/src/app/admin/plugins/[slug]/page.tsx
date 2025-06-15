@@ -1,0 +1,1 @@
+export default function PluginPage() { return <div>Plugin Details</div> }

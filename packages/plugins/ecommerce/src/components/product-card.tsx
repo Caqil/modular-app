@@ -1,0 +1,1 @@
+export default function product-card() { return <div>product-card</div> }

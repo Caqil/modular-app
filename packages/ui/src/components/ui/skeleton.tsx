@@ -1,0 +1,1 @@
+export default function skeleton() { return <div>skeleton</div> }

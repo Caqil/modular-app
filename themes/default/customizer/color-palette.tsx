@@ -1,0 +1,1 @@
+// Customizer for color-palette

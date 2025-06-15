@@ -1,0 +1,1 @@
+export default function media-grid() { return <div>media-grid</div> }

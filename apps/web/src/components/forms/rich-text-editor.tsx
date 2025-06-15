@@ -1,0 +1,1 @@
+export default function rich-text-editor() { return <div>rich-text-editor</div> }

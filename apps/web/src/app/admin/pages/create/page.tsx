@@ -1,0 +1,1 @@
+export default function CreatePagePage() { return <div>Create Page</div> }

@@ -1,0 +1,1 @@
+export default function error-boundary() { return <div>error-boundary</div> }

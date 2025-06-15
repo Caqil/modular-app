@@ -1,0 +1,1 @@
+export default function post-single() { return <div>post-single</div> }

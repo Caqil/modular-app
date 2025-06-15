@@ -1,0 +1,10 @@
+{
+  "extends": "@modular-app/config/typescript/react",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "jsx": "react-jsx"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.test.tsx", "**/*.spec.tsx"]
+}

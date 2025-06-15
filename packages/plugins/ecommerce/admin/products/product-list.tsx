@@ -1,0 +1,1 @@
+export default function product-list() { return <div>product-list</div> }

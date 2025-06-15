@@ -1,0 +1,1 @@
+export default function seo-dashboard() { return <div>seo-dashboard</div> }

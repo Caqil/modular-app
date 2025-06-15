@@ -1,0 +1,35 @@
+{
+  "extends": "@modular-app/packages/config/typescript/base",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@modular-app/core": ["./packages/core/src"],
+      "@modular-app/ui": ["./packages/ui/src"],
+      "@modular-app/config": ["./packages/config/src"]
+    }
+  },
+  "include": [],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    ".next",
+    "apps/**",
+    "packages/**",
+    "themes/**"
+  ],
+  "references": [
+    {
+      "path": "./packages/config"
+    },
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/ui"
+    },
+    {
+      "path": "./apps/web"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+export default function recent-posts() { return <div>recent-posts</div> }

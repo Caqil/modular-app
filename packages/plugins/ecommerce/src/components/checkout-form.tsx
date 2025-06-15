@@ -1,0 +1,1 @@
+export default function checkout-form() { return <div>checkout-form</div> }

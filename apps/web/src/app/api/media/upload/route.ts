@@ -1,0 +1,1 @@
+export async function POST() { return new Response('Upload Media') }

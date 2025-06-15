@@ -1,0 +1,11 @@
+{
+  "name": "@modular-app/contact-form",
+  "version": "0.0.0",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "lint": "eslint src/**"
+  }
+}

@@ -1,0 +1,1 @@
+export default function theme-card() { return <div>theme-card</div> }

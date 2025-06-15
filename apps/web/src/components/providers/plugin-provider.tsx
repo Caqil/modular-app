@@ -1,0 +1,1 @@
+export default function plugin-provider() { return <div>plugin-provider</div> }

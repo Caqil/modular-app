@@ -1,0 +1,1 @@
+export default function blog-settings() { return <div>blog-settings</div> }

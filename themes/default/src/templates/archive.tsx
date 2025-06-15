@@ -1,0 +1,1 @@
+export default function archive() { return <div>archive</div> }

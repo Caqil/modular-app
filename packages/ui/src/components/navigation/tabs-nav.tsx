@@ -1,0 +1,1 @@
+export default function tabs-nav() { return <div>tabs-nav</div> }

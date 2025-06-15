@@ -1,0 +1,1 @@
+export default function shipping-settings() { return <div>shipping-settings</div> }

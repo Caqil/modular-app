@@ -1,0 +1,1 @@
+export default function contact-form() { return <div>contact-form</div> }

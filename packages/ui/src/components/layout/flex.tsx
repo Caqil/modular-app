@@ -1,0 +1,1 @@
+export default function flex() { return <div>flex</div> }

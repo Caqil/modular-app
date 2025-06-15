@@ -1,0 +1,1 @@
+export default function payment-settings() { return <div>payment-settings</div> }

@@ -1,0 +1,1 @@
+export default function real-time-widget() { return <div>real-time-widget</div> }

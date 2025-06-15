@@ -1,0 +1,1 @@
+export default function order-details() { return <div>order-details</div> }

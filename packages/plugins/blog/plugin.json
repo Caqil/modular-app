@@ -1,0 +1,88 @@
+{
+  "name": "blog",
+  "version": "1.0.0",
+  "title": "Blog Plugin",
+  "description": "Full-featured blog plugin with posts, categories, and comments",
+  "author": "My CMS Team",
+  "license": "MIT",
+  "homepage": "https://example.com/plugins/blog",
+  "repository": "https://github.com/example/modular-app-blog-plugin",
+  "main": "dist/index.js",
+  "dependencies": {
+    "@modular-app/core": "^0.1.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "next": "^14.0.0"
+  },
+  "requirements": {
+    "cmsVersion": ">=1.0.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": [
+    "content-management",
+    "frontend-rendering",
+    "admin-interface",
+    "api-endpoints"
+  ],
+  "hooks": [
+    "blog:post_created",
+    "blog:post_updated",
+    "blog:post_deleted",
+    "blog:category_created"
+  ],
+  "adminMenu": {
+    "title": "Blog",
+    "icon": "BookOpen",
+    "position": 2,
+    "submenu": [
+      {
+        "title": "All Posts",
+        "path": "/admin/blog/posts"
+      },
+      {
+        "title": "Add New",
+        "path": "/admin/blog/posts/create"
+      },
+      {
+        "title": "Categories",
+        "path": "/admin/blog/categories"
+      },
+      {
+        "title": "Comments",
+        "path": "/admin/blog/comments"
+      }
+    ]
+  },
+  "publicRoutes": [
+    {
+      "path": "/blog",
+      "component": "BlogList"
+    },
+    {
+      "path": "/blog/[slug]",
+      "component": "BlogPost"
+    },
+    {
+      "path": "/blog/category/[slug]",
+      "component": "BlogCategory"
+    }
+  ],
+  "settings": {
+    "postsPerPage": {
+      "type": "number",
+      "default": 10,
+      "label": "Posts per page"
+    },
+    "allowComments": {
+      "type": "boolean",
+      "default": true,
+      "label": "Allow comments"
+    },
+    "commentModeration": {
+      "type": "boolean",
+      "default": true,
+      "label": "Moderate comments"
+    }
+  }
+}
