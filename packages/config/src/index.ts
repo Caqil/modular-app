@@ -1,9 +1,4 @@
-export * from './eslint';
-export * from './tailwind';
-export * from './typescript';
-export * from './prettier';
 
-// Re-export configurations for easy access
 export { default as eslintBase } from './eslint/base.js';
 export { default as eslintReact } from './eslint/react.js';
 export { default as eslintNode } from './eslint/node.js';
