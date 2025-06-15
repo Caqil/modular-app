@@ -93,14 +93,16 @@ export class FilterHooks {
 
     // Update stats
     this.stats.totalFilters--;
-    this.stats.filtersByPlugin[filter.plugin] = Math.max(
-      (this.stats.filtersByPlugin[filter.plugin] || 1) - 1,
-      0
-    );
+    if (filter) {
+      this.stats.filtersByPlugin[filter.plugin] = Math.max(
+        (this.stats.filtersByPlugin[filter.plugin] || 1) - 1,
+        0
+      );
+    }
 
     this.logger.debug(`Filter hook removed: ${filterName}`, {
       filterId,
-      plugin: filter.plugin,
+      plugin: filter ? filter.plugin : undefined,
     });
 
     // Emit filter removal event
@@ -108,7 +110,7 @@ export class FilterHooks {
       type: 'filter',
       name: filterName,
       hookId: filterId,
-      plugin: filter.plugin,
+      plugin: filter ? filter.plugin : undefined,
     });
 
     return true;
@@ -278,7 +280,7 @@ export class FilterHooks {
         reject(new Error(`Filter hook timeout after ${timeout}ms`));
       }, timeout);
 
-      Promise.resolve(callback(...args))
+      Promise.resolve(callback.apply(null, args as [any, ...any[]]))
         .then(result => {
           clearTimeout(timer);
           resolve(result);

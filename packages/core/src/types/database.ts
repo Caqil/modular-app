@@ -1,6 +1,6 @@
 import type { Connection, Model, Document, QueryOptions as MongooseQueryOptions } from 'mongoose';
 import type { Types } from 'mongoose';
-
+import type { PopulateOptions } from 'mongoose';
 export interface DatabaseConfig {
   uri: string;
   name: string;
@@ -35,8 +35,10 @@ export interface ModelDefinition<T = any> {
   model?: Model<T>;
 }
 
+
+
 export interface QueryOptions extends MongooseQueryOptions {
-  populate?: string | string[] | Record<string, any>;
+  populate?: string | string[] | PopulateOptions | PopulateOptions[];
   lean?: boolean;
   limit?: number;
   skip?: number;

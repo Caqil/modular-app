@@ -350,7 +350,7 @@ MediaSchema.pre('save', function(next) {
   }
 
   // Auto-generate dimensions string for images
-  if (this.isImage && this.metadata.width && this.metadata.height) {
+  if (this.get('isImage') && this.metadata.width && this.metadata.height) {
     this.metadata.dimensions = `${this.metadata.width}x${this.metadata.height}`;
   }
 

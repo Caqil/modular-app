@@ -3,7 +3,7 @@ import { EventManager } from '../events/event-manager';
 import { ConfigManager } from '../config/config-manager';
 import { ActionHooks } from './action-hooks';
 import { FilterHooks } from './filter-hooks';
-import type {
+import {
   HookCallback,
   FilterCallback,
   HookStats,
@@ -461,7 +461,7 @@ export class HookManager {
         since: '1.0.0',
       },
       {
-        name: CoreFilters.USER_CAPABILITIES,
+        name: CoreFilters.USER_ROLE_CAPABILITIES,
         description: 'Filter user capabilities',
         parameters: [
           { name: 'capabilities', type: 'array', description: 'User capabilities' },

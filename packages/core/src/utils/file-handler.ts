@@ -12,7 +12,7 @@ export interface FileInfo {
   path: string;
   url: string;
   checksum: string;
-  metadata?: ImageMetadata | VideoMetadata | DocumentMetadata;
+  metadata?: ImageMetadata | VideoMetadata | DocumentMetadata | undefined;
 }
 
 export interface ImageMetadata {

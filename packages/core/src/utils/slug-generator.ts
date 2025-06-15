@@ -31,13 +31,22 @@ export class SlugGenerator {
     const config = { ...this.DEFAULT_OPTIONS, ...options };
     
     // First pass: basic slugify
-    let slug = slugify(text, {
+    const slugifyOptions: {
+      replacement: string;
+      lower: boolean;
+      strict: boolean;
+      trim: boolean;
+      locale?: string;
+    } = {
       replacement: config.replacement!,
       lower: config.lower!,
       strict: config.strict!,
-      locale: config.locale,
       trim: config.trim!,
-    });
+    };
+    if (config.locale) {
+      slugifyOptions.locale = config.locale;
+    }
+    let slug = slugify(text, slugifyOptions);
 
     // Add prefix if specified
     if (config.prefix) {
@@ -147,7 +156,7 @@ export class SlugGenerator {
         return 'home';
       }
       
-      return segments[segments.length - 1];
+      return segments[segments.length - 1] ?? 'home';
     } catch {
       return this.generate(url);
     }

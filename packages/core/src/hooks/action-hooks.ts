@@ -101,23 +101,25 @@ export class ActionHooks {
 
     // Update stats
     this.stats.totalHooks--;
-    this.stats.hooksByPlugin[hook.plugin] = Math.max(
-      (this.stats.hooksByPlugin[hook.plugin] || 1) - 1,
-      0
-    );
+    if (hook) {
+      this.stats.hooksByPlugin[hook.plugin] = Math.max(
+        (this.stats.hooksByPlugin[hook.plugin] || 1) - 1,
+        0
+      );
 
-    this.logger.debug(`Action hook removed: ${hookName}`, {
-      hookId,
-      plugin: hook.plugin,
-    });
+      this.logger.debug(`Action hook removed: ${hookName}`, {
+        hookId,
+        plugin: hook.plugin,
+      });
 
-    // Emit hook removal event
-    this.events.emit('hook:removed', {
-      type: 'action',
-      name: hookName,
-      hookId,
-      plugin: hook.plugin,
-    });
+      // Emit hook removal event
+      this.events.emit('hook:removed', {
+        type: 'action',
+        name: hookName,
+        hookId,
+        plugin: hook.plugin,
+      });
+    }
 
     return true;
   }

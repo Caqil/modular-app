@@ -3,8 +3,9 @@ import type { ThemeManager } from '../theme/theme-manager';
 import type { HookManager } from '../hooks/hook-manager';
 import type { EventManager } from '../events/event-manager';
 import type { ConfigManager } from '../config/config-manager';
-import type { DatabaseConnection } from '../database/connection';
 import type { CacheManager } from '../cache/cache-manager';
+import { DatabaseConnection } from './database';
+import Logger from '../utils/logger';
 
 export interface CMSConfig {
   database: {

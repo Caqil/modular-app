@@ -37,8 +37,8 @@ export interface IPost extends Document {
   categories: Types.ObjectId[];
   tags: string[];
   customFields: Map<string, any>;
-  publishedAt?: Date;
-  scheduledAt?: Date;
+  publishedAt?: Date | undefined;
+  scheduledAt?: Date | undefined;
   lastModifiedBy?: Types.ObjectId;
   revisions: Array<{
     content: string;
@@ -378,7 +378,7 @@ PostSchema.virtual('wordCount').get(function() {
 
 PostSchema.virtual('estimatedReadingTime').get(function() {
   const wordsPerMinute = 200;
-  const words = this.wordCount;
+  const words = this.get('wordCount');
   return Math.ceil(words / wordsPerMinute);
 });
 
@@ -668,11 +668,11 @@ PostSchema.pre('save', async function(next) {
 
     // Generate excerpt if not provided
     if (!this.excerpt && this.content) {
-      this.excerpt = this.generateExcerpt();
+      this.excerpt = (this as any).generateExcerpt();
     }
 
     // Calculate reading time
-    this.meta.readingTime = this.estimatedReadingTime;
+    this.meta.readingTime = this.get('estimatedReadingTime');
 
     // Clean and validate tags
     if (this.tags && this.tags.length > 0) {

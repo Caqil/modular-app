@@ -46,10 +46,10 @@ export interface RegisteredHook {
   priority: number;
   plugin: string;
   addedAt: Date;
-  once?: boolean;
-  condition?: (...args: any[]) => boolean;
-  timeout?: number;
-  errorHandler?: (error: Error, ...args: any[]) => void;
+  once?: boolean | undefined;
+  condition?: ((...args: any[]) => boolean) | undefined;
+  timeout?: number | undefined;
+  errorHandler?: ((error: Error, ...args: any[]) => void) | undefined;
 }
 
 export interface RegisteredFilter {
@@ -70,8 +70,8 @@ export interface HookExecution {
   duration: number;
   plugin: string;
   success: boolean;
-  error?: string;
-  args?: any[];
+  error?: string | undefined;
+  args?: any[] | undefined;
   result?: any;
 }
 

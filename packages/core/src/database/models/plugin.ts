@@ -56,7 +56,7 @@ export interface IPlugin extends Document {
   installedAt: Date;
   activatedAt?: Date;
   lastUpdated?: Date;
-  errorMessage?: string;
+  errorMessage?: string | undefined;
   errorCount: number;
   tags: string[];
   rating?: {
