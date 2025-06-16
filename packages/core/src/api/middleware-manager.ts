@@ -418,7 +418,7 @@ export class MiddlewareManager {
         }
 
         // Sanitize validated data
-        req.body = Sanitizer.sanitizeObsject(req.body);
+        req.body = Sanitizer.sanitizeJson(req.body);
         next();
 
       } catch (error) {

@@ -367,8 +367,8 @@ export class AuthManager {
       const result: AuthResult = {
         success: true,
         user: authUser,
-        tokens,
-        session,
+        ...(tokens ? { tokens } : {}),
+        ...(session ? { session } : {}),
       };
 
       // Apply after auth middleware
@@ -424,11 +424,13 @@ export class AuthManager {
       if (!refreshResult.success) {
         return {
           success: false,
-          error: refreshResult.error || {
-            code: AuthErrorCode.TOKEN_INVALID,
-            message: 'Token refresh failed',
-            timestamp: new Date()
-          },
+          error: refreshResult.error !== undefined
+            ? refreshResult.error
+            : {
+                code: AuthErrorCode.TOKEN_INVALID,
+                message: 'Token refresh failed',
+                timestamp: new Date()
+              },
         };
       }
 
@@ -445,7 +447,11 @@ export class AuthManager {
       if (!statusCheck.valid) {
         return this.createAuthError(statusCheck.errorCode!, statusCheck.message!);
       }
+ // Generate tokens
+      const tokens = await this.jwtHandler.generateTokens(user);
 
+      // Create session
+      let session: AuthSession | undefined;
       // Update session if exists
       if (this.managerConfig.enableSessionManagement && decoded?.sessionId) {
         await this.updateSessionActivity(decoded.sessionId);
@@ -456,9 +462,9 @@ export class AuthManager {
       const result: AuthResult = {
         success: true,
         user: authUser,
-        tokens: refreshResult.tokens,
+        ...(tokens ? { tokens } : {}),
+        ...(session ? { session } : {}),
       };
-
       // Apply after refresh middleware
       const finalResult = await this.applyAfterRefreshMiddleware(result);
 
@@ -1111,7 +1117,8 @@ export class AuthManager {
 
   private validateCredentials(credentials: AuthCredentials): { valid: boolean; error?: string } {
     try {
-      const validation = Validator.validate(Validator.authCredentialsSchema, credentials);
+      // Use an appropriate schema for AuthCredentials validation
+      const validation = Validator.validate(Validator.loginSchema, credentials);
       if (!validation.success) {
         return { valid: false, error: validation.errors.message };
       }

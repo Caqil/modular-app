@@ -2,7 +2,8 @@
 // ROUTE MANAGER - ROUTE REGISTRATION AND MANAGEMENT SYSTEM
 // ===================================================================
 
-import { Router } from 'express';
+
+import express, { Router } from 'express';
 import { Logger } from '../utils/logger';
 import { EventManager } from '../events/event-manager';
 import { ConfigManager } from '../config/config-manager';

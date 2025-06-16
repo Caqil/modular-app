@@ -2,7 +2,7 @@
 // API MANAGER - MAIN API ORCHESTRATION SYSTEM
 // ===================================================================
 
-import express, { Express, Router } from 'express';
+import express, { Express } from 'express';
 import { createServer, Server } from 'http';
 import { Logger } from '../utils/logger';
 import { EventManager } from '../events/event-manager';
