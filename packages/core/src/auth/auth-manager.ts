@@ -317,6 +317,7 @@ export class AuthManager {
         return this.createAuthError(AuthErrorCode.INVALID_CREDENTIALS, 'Invalid credentials');
       }
 
+
       // Check two-factor authentication
       if (this.managerConfig.enableTwoFactorAuth && user.twoFactorEnabled && !finalCredentials.twoFactorCode) {
         const twoFactorToken = await this.generateTwoFactorToken(user);
