@@ -4,7 +4,7 @@ import React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { AlertTriangle, CheckCircle, Info, XCircle } from 'lucide-react';
 import {
-    AlertDialog,
+  AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
@@ -71,7 +71,12 @@ export function ConfirmationDialog({
   children,
 }: ConfirmationDialogProps) {
   const [isLoading, setIsLoading] = React.useState(false);
-  const Icon = iconMap[variant];
+  const iconKey =
+    variant &&
+    ['default', 'destructive', 'warning', 'success', 'info'].includes(variant)
+      ? variant
+      : 'default';
+  const Icon = iconMap[iconKey as keyof typeof iconMap];
 
   const handleConfirm = async () => {
     try {
@@ -91,7 +96,7 @@ export function ConfirmationDialog({
   };
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open ?? false} onOpenChange={onOpenChange ?? (() => {})}>
       {children && <AlertDialogTrigger asChild>{children}</AlertDialogTrigger>}
       <AlertDialogContent>
         <AlertDialogHeader>

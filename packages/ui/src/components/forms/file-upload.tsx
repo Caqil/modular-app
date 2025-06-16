@@ -215,7 +215,7 @@ function FileItem({
   onRemove,
 }: {
   file: FileWithProgress;
-  progress?: number;
+  progress?: number | undefined;
   onRemove: () => void;
 }) {
   const isImage = file.type.startsWith('image/');

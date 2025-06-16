@@ -1,314 +1,81 @@
-// ===================================================================
-// STACK COMPONENT - VERTICAL/HORIZONTAL STACKING LAYOUT
-// ===================================================================
 
 'use client';
 
 import React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { Slot } from '@radix-ui/react-slot';
 import { cn } from '../../lib/utils';
-import type { StackProps } from '../../types';
 
-// ===================================================================
-// STACK VARIANT STYLES
-// ===================================================================
-
-const stackVariants = cva(
-  // Base styles
-  'flex',
-  {
-    variants: {
-      direction: {
-        vertical: 'flex-col',
-        horizontal: 'flex-row',
-      },
-      spacing: {
-        none: 'gap-0',
-        xs: 'gap-1',
-        sm: 'gap-2',
-        md: 'gap-4',
-        lg: 'gap-6',
-        xl: 'gap-8',
-        '2xl': 'gap-12',
-        '3xl': 'gap-16',
-      },
-      align: {
-        start: '',
-        center: '',
-        end: '',
-        stretch: '',
-      },
-      justify: {
-        start: 'justify-start',
-        center: 'justify-center',
-        end: 'justify-end',
-        between: 'justify-between',
-        around: 'justify-around',
-        evenly: 'justify-evenly',
-      },
-      wrap: {
-        true: 'flex-wrap',
-        false: 'flex-nowrap',
-      },
+const stackVariants = cva('flex', {
+  variants: {
+    direction: {
+      vertical: 'flex-col',
+      horizontal: 'flex-row',
     },
-    compoundVariants: [
-      // Vertical alignment variants
-      {
-        direction: 'vertical',
-        align: 'start',
-        className: 'items-start',
-      },
-      {
-        direction: 'vertical',
-        align: 'center',
-        className: 'items-center',
-      },
-      {
-        direction: 'vertical',
-        align: 'end',
-        className: 'items-end',
-      },
-      {
-        direction: 'vertical',
-        align: 'stretch',
-        className: 'items-stretch',
-      },
-      // Horizontal alignment variants
-      {
-        direction: 'horizontal',
-        align: 'start',
-        className: 'items-start',
-      },
-      {
-        direction: 'horizontal',
-        align: 'center',
-        className: 'items-center',
-      },
-      {
-        direction: 'horizontal',
-        align: 'end',
-        className: 'items-end',
-      },
-      {
-        direction: 'horizontal',
-        align: 'stretch',
-        className: 'items-stretch',
-      },
-    ],
-    defaultVariants: {
-      direction: 'vertical',
-      spacing: 'md',
-      align: 'stretch',
-      justify: 'start',
-      wrap: false,
+    spacing: {
+      none: 'gap-0',
+      xs: 'gap-1',
+      sm: 'gap-2',
+      md: 'gap-4',
+      lg: 'gap-6',
+      xl: 'gap-8',
+      '2xl': 'gap-10',
     },
-  }
-);
-
-// ===================================================================
-// STACK COMPONENT
-// ===================================================================
-
-export interface StackComponentProps
-  extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'>,
-    VariantProps<typeof stackVariants> {
-  children?: React.ReactNode;
-  asChild?: boolean;
-  as?: keyof JSX.IntrinsicElements;
-  divider?: React.ReactNode | boolean;
-}
-
-const Stack = React.forwardRef<HTMLDivElement, StackComponentProps>(
-  (
-    {
-      className,
-      direction,
-      spacing,
-      align,
-      justify,
-      wrap,
-      divider,
-      asChild = false,
-      as: Component = 'div',
-      children,
-      ...props
+    align: {
+      start: 'items-start',
+      center: 'items-center',
+      end: 'items-end',
+      stretch: 'items-stretch',
     },
-    ref
-  ) => {
-    const Comp = asChild ? Slot : Component;
+    justify: {
+      start: 'justify-start',
+      center: 'justify-center',
+      end: 'justify-end',
+      between: 'justify-between',
+    },
+  },
+  defaultVariants: {
+    direction: 'vertical',
+    spacing: 'md',
+    align: 'stretch',
+    justify: 'start',
+  },
+});
 
-    // Handle divider logic
-    const renderChildren = () => {
-      if (!divider || !children) {
-        return children;
-      }
+interface StackProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof stackVariants> {}
 
-      const childArray = React.Children.toArray(children);
-      const dividerElement =
-        divider === true ? (
-          <div
-            className={cn(
-              'bg-border',
-              direction === 'vertical' ? 'h-px w-full' : 'h-full w-px'
-            )}
-          />
-        ) : (
-          divider
-        );
-
-      return childArray.reduce<React.ReactNode[]>((acc, child, index) => {
-        acc.push(child);
-        if (index < childArray.length - 1) {
-          acc.push(
-            <React.Fragment key={`divider-${index}`}>
-              {dividerElement}
-            </React.Fragment>
-          );
-        }
-        return acc;
-      }, []);
-    };
-
+const Stack = React.forwardRef<HTMLDivElement, StackProps>(
+  ({ className, direction, spacing, align, justify, ...props }, ref) => {
     return (
-      <Comp
+      <div
+        ref={ref}
         className={cn(
-          stackVariants({
-            direction,
-            spacing: divider ? 'none' : spacing,
-            align,
-            justify,
-            wrap,
-          }),
-          divider && (direction === 'vertical' ? 'space-y-4' : 'space-x-4'),
+          stackVariants({ direction, spacing, align, justify }),
           className
         )}
-        ref={ref}
         {...props}
-      >
-        {renderChildren()}
-      </Comp>
+      />
     );
   }
 );
 
 Stack.displayName = 'Stack';
 
-// ===================================================================
-// STACK PRESETS
-// ===================================================================
-
-// Vertical Stack (VStack)
-export const VStack = React.forwardRef<
-  HTMLDivElement,
-  Omit<StackComponentProps, 'direction'>
->(({ children, ...props }, ref) => {
-  return (
-    <Stack direction="vertical" ref={ref} {...props}>
-      {children}
-    </Stack>
-  );
-});
-
-VStack.displayName = 'VStack';
-
-// Horizontal Stack (HStack)
-export const HStack = React.forwardRef<
-  HTMLDivElement,
-  Omit<StackComponentProps, 'direction'>
->(({ children, ...props }, ref) => {
-  return (
-    <Stack direction="horizontal" ref={ref} {...props}>
-      {children}
-    </Stack>
-  );
-});
-
-HStack.displayName = 'HStack';
-
-// Center Stack - centers content both horizontally and vertically
-export const CenterStack = React.forwardRef<
-  HTMLDivElement,
-  Omit<StackComponentProps, 'align' | 'justify'>
->(({ children, ...props }, ref) => {
-  return (
-    <Stack align="center" justify="center" ref={ref} {...props}>
-      {children}
-    </Stack>
-  );
-});
-
-CenterStack.displayName = 'CenterStack';
-
-// Spacer component for use within stacks
-export const Spacer = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => {
-  return <div className={cn('flex-1', className)} ref={ref} {...props} />;
-});
-
-Spacer.displayName = 'Spacer';
-
-// ===================================================================
-// STACK GROUP - FOR GROUPING RELATED STACKS
-// ===================================================================
-
-const stackGroupVariants = cva('space-y-6', {
-  variants: {
-    spacing: {
-      none: 'space-y-0',
-      xs: 'space-y-1',
-      sm: 'space-y-2',
-      md: 'space-y-4',
-      lg: 'space-y-6',
-      xl: 'space-y-8',
-      '2xl': 'space-y-12',
-      '3xl': 'space-y-16',
-    },
-  },
-  defaultVariants: {
-    spacing: 'lg',
-  },
-});
-
-export interface StackGroupProps
-  extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'>,
-    VariantProps<typeof stackGroupVariants> {
-  children?: React.ReactNode;
-  asChild?: boolean;
-}
-
-const StackGroup = React.forwardRef<HTMLDivElement, StackGroupProps>(
-  ({ className, spacing, asChild = false, children, ...props }, ref) => {
-    const Comp = asChild ? Slot : 'div';
-
-    return (
-      <Comp
-        className={cn(stackGroupVariants({ spacing }), className)}
-        ref={ref}
-        {...props}
-      >
-        {children}
-      </Comp>
-    );
+// Convenience components
+const VStack = React.forwardRef<HTMLDivElement, StackProps>(
+  ({ direction = 'vertical', ...props }, ref) => {
+    return <Stack ref={ref} direction={direction} {...props} />;
   }
 );
 
-StackGroup.displayName = 'StackGroup';
+const HStack = React.forwardRef<HTMLDivElement, StackProps>(
+  ({ direction = 'horizontal', ...props }, ref) => {
+    return <Stack ref={ref} direction={direction} {...props} />;
+  }
+);
 
-// ===================================================================
-// EXPORTS
-// ===================================================================
+VStack.displayName = 'VStack';
+HStack.displayName = 'HStack';
 
-export {
-  Stack,
-  VStack,
-  HStack,
-  CenterStack,
-  Spacer,
-  StackGroup,
-  stackVariants,
-  stackGroupVariants,
-};
-export type { StackComponentProps as StackProps };
+export { Stack, VStack, HStack, stackVariants };

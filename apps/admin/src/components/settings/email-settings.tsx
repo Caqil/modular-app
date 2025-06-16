@@ -6,11 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@modular-app/ui';
 import { Button } from '@modular-app/ui';
 import { Input } from '@modular-app/ui';
 import { Label } from '@modular-app/ui';
-import { Textarea } from '@modular-app/ui';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@radix-ui/react-select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@radix-ui/react-tabs';
-import { Badge } from '@radix-ui/react-badge';
 import { AlertCircle, Mail, Send, Settings, TestTube } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@modular-app/ui/components/ui/tabs';
 
 const emailSettingsSchema = z.object({
   enabled: z.boolean().default(true),
