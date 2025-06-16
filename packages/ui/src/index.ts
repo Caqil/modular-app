@@ -56,15 +56,14 @@ export {
 // ===================================================================
 // NAVIGATION COMPONENTS
 // ===================================================================
-
 // Sidebar Navigation Component
-export { 
-  SidebarNav, 
-  SidebarHeader, 
-  SidebarFooter,
-  sidebarVariants, 
-  sidebarItemVariants,
+export {
+    SidebarNav, SidebarHeader,
+    SidebarFooter,
+    sidebarVariants,
+    sidebarItemVariants
 } from './components/navigation/sidebar-nav';
+export type { SidebarNavItem } from './components/navigation/sidebar-nav';
 
 // Tabs Navigation Component
 export { 

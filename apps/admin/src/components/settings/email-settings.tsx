@@ -1,393 +1,488 @@
-import React from 'react';
+'use client';
+
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Card, CardContent, CardHeader, CardTitle } from '@modular-app/ui';
-import { Button } from '@modular-app/ui';
-import { Input } from '@modular-app/ui';
-import { Label } from '@modular-app/ui';
-import { AlertCircle, Mail, Send, Settings, TestTube } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger } from '@modular-app/ui/components/ui/tabs';
+import { z } from 'zod';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Textarea,
+  FormSection,
+} from '@modular-app/ui';
+import { Settings, TestTube, Mail, Shield, AlertCircle } from 'lucide-react';
 
+// Email settings validation schema
 const emailSettingsSchema = z.object({
-  enabled: z.boolean().default(true),
-  adapter: z.enum(['smtp', 'sendgrid', 'ses', 'mailgun', 'postmark']).default('smtp'),
-  from: z.object({
-    name: z.string().min(1, 'From name is required').max(100),
-    email: z.string().email('Invalid email address'),
-  }),
-  replyTo: z.string().email('Invalid email address').optional().or(z.literal('')),
-  smtp: z.object({
-    host: z.string().min(1, 'SMTP host is required'),
-    port: z.number().min(1).max(65535).default(587),
-    secure: z.boolean().default(false),
-    user: z.string().min(1, 'SMTP user is required'),
-    password: z.string().min(1, 'SMTP password is required'),
-  }),
-  sendgrid: z.object({
-    apiKey: z.string().optional(),
-  }),
-  mailgun: z.object({
-    domain: z.string().optional(),
-    apiKey: z.string().optional(),
-  }),
-  postmark: z.object({
-    serverToken: z.string().optional(),
-  }),
-  templates: z.object({
-    welcomeEmail: z.boolean().default(true),
-    passwordReset: z.boolean().default(true),
-    emailVerification: z.boolean().default(true),
-    notificationEmail: z.boolean().default(true),
-  }),
+  // SMTP Configuration
+  smtpHost: z.string().min(1, 'SMTP host is required'),
+  smtpPort: z.number().min(1).max(65535, 'Invalid port number'),
+  smtpUsername: z.string().min(1, 'SMTP username is required'),
+  smtpPassword: z.string().min(1, 'SMTP password is required'),
+  smtpEncryption: z.enum(['none', 'tls', 'ssl']),
+  
+  // From Settings
+  fromName: z.string().min(1, 'From name is required'),
+  fromEmail: z.string().email('Invalid email address'),
+  replyToEmail: z.string().email('Invalid reply-to email').optional().or(z.literal('')),
+  
+  // Email Features
+  enableEmailNotifications: z.boolean(),
+  enableEmailDigests: z.boolean(),
+  enableEmailMarketing: z.boolean(),
+  
+  // Templates
+  emailTemplate: z.enum(['default', 'modern', 'minimal', 'corporate']),
+  emailFooter: z.string().max(500, 'Footer must be less than 500 characters').optional(),
+  
+  // Rate Limiting
+  maxEmailsPerHour: z.number().min(1).max(10000),
+  enableRateLimiting: z.boolean(),
+  
+  // Test Settings
+  testEmail: z.string().email('Invalid test email address').optional().or(z.literal('')),
 });
 
-type EmailSettingsForm = z.infer<typeof emailSettingsSchema>;
+type EmailSettingsData = z.infer<typeof emailSettingsSchema>;
 
 interface EmailSettingsProps {
-  onSave: (data: EmailSettingsForm) => Promise<void>;
-  onTest: (adapter: string) => Promise<void>;
-  initialData?: Partial<EmailSettingsForm>;
-  isLoading?: boolean;
+  initialData?: Partial<EmailSettingsData>;
+  onSave?: (data: EmailSettingsData) => Promise<void>;
+  onTest?: (testEmail: string) => Promise<boolean>;
 }
 
-export function EmailSettings({ onSave, onTest, initialData, isLoading }: EmailSettingsProps) {
-  const [testing, setTesting] = React.useState(false);
-  const [testResult, setTestResult] = React.useState<{
-    success: boolean;
-    message: string;
-  } | null>(null);
+export function EmailSettings({ 
+  initialData,
+  onSave,
+  onTest 
+}: EmailSettingsProps) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  const form = useForm<EmailSettingsForm>({
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors, isDirty }
+  } = useForm<EmailSettingsData>({
     resolver: zodResolver(emailSettingsSchema),
     defaultValues: {
-      enabled: initialData?.enabled ?? true,
-      adapter: initialData?.adapter ?? 'smtp',
-      from: {
-        name: initialData?.from?.name ?? 'Modular CMS',
-        email: initialData?.from?.email ?? '',
-      },
-      replyTo: initialData?.replyTo ?? '',
-      smtp: {
-        host: initialData?.smtp?.host ?? '',
-        port: initialData?.smtp?.port ?? 587,
-        secure: initialData?.smtp?.secure ?? false,
-        user: initialData?.smtp?.user ?? '',
-        password: initialData?.smtp?.password ?? '',
-      },
-      sendgrid: {
-        apiKey: initialData?.sendgrid?.apiKey ?? '',
-      },
-      mailgun: {
-        domain: initialData?.mailgun?.domain ?? '',
-        apiKey: initialData?.mailgun?.apiKey ?? '',
-      },
-      postmark: {
-        serverToken: initialData?.postmark?.serverToken ?? '',
-      },
-      templates: {
-        welcomeEmail: initialData?.templates?.welcomeEmail ?? true,
-        passwordReset: initialData?.templates?.passwordReset ?? true,
-        emailVerification: initialData?.templates?.emailVerification ?? true,
-        notificationEmail: initialData?.templates?.notificationEmail ?? true,
-      },
+      smtpHost: '',
+      smtpPort: 587,
+      smtpUsername: '',
+      smtpPassword: '',
+      smtpEncryption: 'tls',
+      fromName: 'Modular App',
+      fromEmail: '',
+      replyToEmail: '',
+      enableEmailNotifications: true,
+      enableEmailDigests: false,
+      enableEmailMarketing: false,
+      emailTemplate: 'default',
+      emailFooter: '',
+      maxEmailsPerHour: 100,
+      enableRateLimiting: true,
+      testEmail: '',
+      ...initialData,
     },
   });
 
-  const watchedAdapter = form.watch('adapter');
-  const watchedEnabled = form.watch('enabled');
+  const watchedValues = watch();
 
-  const handleTest = async () => {
-    setTesting(true);
-    setTestResult(null);
-    
+  const onSubmit = async (data: EmailSettingsData) => {
+    setIsLoading(true);
     try {
-      await onTest(watchedAdapter);
+      await onSave?.(data);
+      setTestResult({ success: true, message: 'Email settings saved successfully!' });
+    } catch (error) {
+      setTestResult({ 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Failed to save settings' 
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTestEmail = async () => {
+    if (!watchedValues.testEmail) {
+      setTestResult({ success: false, message: 'Please enter a test email address' });
+      return;
+    }
+
+    setIsTesting(true);
+    try {
+      const success = await onTest?.(watchedValues.testEmail);
       setTestResult({
-        success: true,
-        message: 'Email test successful! Check your inbox.',
+        success: success ?? false,
+        message: success ? 'Test email sent successfully!' : 'Failed to send test email'
       });
     } catch (error) {
       setTestResult({
         success: false,
-        message: error instanceof Error ? error.message : 'Email test failed',
+        message: error instanceof Error ? error.message : 'Test email failed'
       });
     } finally {
-      setTesting(false);
-    }
-  };
-
-  const handleSubmit = async (data: EmailSettingsForm) => {
-    try {
-      await onSave(data);
-    } catch (error) {
-      console.error('Failed to save email settings:', error);
+      setIsTesting(false);
     }
   };
 
   return (
-    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      {/* SMTP Configuration */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div className="flex items-center space-x-2">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5" />
-            <CardTitle>Email Settings</CardTitle>
-            <Badge variant={watchedEnabled ? 'default' : 'secondary'}>
-              {watchedEnabled ? 'Enabled' : 'Disabled'}
-            </Badge>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Switch
-              checked={watchedEnabled}
-              onCheckedChange={(checked) => form.setValue('enabled', checked)}
-            />
-            <Label>Enable Email</Label>
-          </div>
+            SMTP Configuration
+          </CardTitle>
+          <CardDescription>
+            Configure your SMTP server settings for sending emails
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Tabs value={watchedAdapter} onValueChange={(value) => form.setValue('adapter', value as any)}>
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="smtp">SMTP</TabsTrigger>
-              <TabsTrigger value="sendgrid">SendGrid</TabsTrigger>
-              <TabsTrigger value="ses">AWS SES</TabsTrigger>
-              <TabsTrigger value="mailgun">Mailgun</TabsTrigger>
-              <TabsTrigger value="postmark">Postmark</TabsTrigger>
-            </TabsList>
-
-            {/* General Settings */}
-            <div className="mt-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="fromName">From Name</Label>
-                  <Input
-                    id="fromName"
-                    {...form.register('from.name')}
-                    placeholder="Your Site Name"
-                  />
-                  {form.formState.errors.from?.name && (
-                    <p className="text-sm text-red-500 mt-1">
-                      {form.formState.errors.from.name.message}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <Label htmlFor="fromEmail">From Email</Label>
-                  <Input
-                    id="fromEmail"
-                    type="email"
-                    {...form.register('from.email')}
-                    placeholder="noreply@yoursite.com"
-                  />
-                  {form.formState.errors.from?.email && (
-                    <p className="text-sm text-red-500 mt-1">
-                      {form.formState.errors.from.email.message}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="replyTo">Reply To Email (Optional)</Label>
+        <CardContent className="space-y-4">
+          <FormSection>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="smtpHost">SMTP Host *</Label>
                 <Input
-                  id="replyTo"
-                  type="email"
-                  {...form.register('replyTo')}
-                  placeholder="support@yoursite.com"
+                  id="smtpHost"
+                  placeholder="smtp.gmail.com"
+                  {...register('smtpHost')}
                 />
-                {form.formState.errors.replyTo && (
-                  <p className="text-sm text-red-500 mt-1">
-                    {form.formState.errors.replyTo.message}
-                  </p>
+                {errors.smtpHost && (
+                  <p className="text-sm text-red-600">{errors.smtpHost.message}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="smtpPort">SMTP Port *</Label>
+                <Input
+                  id="smtpPort"
+                  type="number"
+                  placeholder="587"
+                  {...register('smtpPort', { valueAsNumber: true })}
+                />
+                {errors.smtpPort && (
+                  <p className="text-sm text-red-600">{errors.smtpPort.message}</p>
                 )}
               </div>
             </div>
 
-            {/* SMTP Settings */}
-            <TabsContent value="smtp" className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="smtpHost">SMTP Host</Label>
-                  <Input
-                    id="smtpHost"
-                    {...form.register('smtp.host')}
-                    placeholder="smtp.gmail.com"
-                  />
-                  {form.formState.errors.smtp?.host && (
-                    <p className="text-sm text-red-500 mt-1">
-                      {form.formState.errors.smtp.host.message}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <Label htmlFor="smtpPort">SMTP Port</Label>
-                  <Input
-                    id="smtpPort"
-                    type="number"
-                    {...form.register('smtp.port', { valueAsNumber: true })}
-                    placeholder="587"
-                  />
-                  {form.formState.errors.smtp?.port && (
-                    <p className="text-sm text-red-500 mt-1">
-                      {form.formState.errors.smtp.port.message}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="smtpUser">SMTP Username</Label>
-                  <Input
-                    id="smtpUser"
-                    {...form.register('smtp.user')}
-                    placeholder="your-email@gmail.com"
-                  />
-                  {form.formState.errors.smtp?.user && (
-                    <p className="text-sm text-red-500 mt-1">
-                      {form.formState.errors.smtp.user.message}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <Label htmlFor="smtpPassword">SMTP Password</Label>
-                  <Input
-                    id="smtpPassword"
-                    type="password"
-                    {...form.register('smtp.password')}
-                    placeholder="your-app-password"
-                  />
-                  {form.formState.errors.smtp?.password && (
-                    <p className="text-sm text-red-500 mt-1">
-                      {form.formState.errors.smtp.password.message}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  checked={form.watch('smtp.secure')}
-                  onCheckedChange={(checked) => form.setValue('smtp.secure', checked)}
-                />
-                <Label>Use SSL/TLS</Label>
-              </div>
-            </TabsContent>
-
-            {/* SendGrid Settings */}
-            <TabsContent value="sendgrid" className="space-y-4">
-              <div>
-                <Label htmlFor="sendgridApiKey">SendGrid API Key</Label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="smtpUsername">SMTP Username *</Label>
                 <Input
-                  id="sendgridApiKey"
-                  type="password"
-                  {...form.register('sendgrid.apiKey')}
-                  placeholder="SG...."
+                  id="smtpUsername"
+                  placeholder="your-email@gmail.com"
+                  {...register('smtpUsername')}
                 />
+                {errors.smtpUsername && (
+                  <p className="text-sm text-red-600">{errors.smtpUsername.message}</p>
+                )}
               </div>
-            </TabsContent>
-
-            {/* Mailgun Settings */}
-            <TabsContent value="mailgun" className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="mailgunDomain">Mailgun Domain</Label>
-                  <Input
-                    id="mailgunDomain"
-                    {...form.register('mailgun.domain')}
-                    placeholder="mg.yoursite.com"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="mailgunApiKey">Mailgun API Key</Label>
-                  <Input
-                    id="mailgunApiKey"
-                    type="password"
-                    {...form.register('mailgun.apiKey')}
-                    placeholder="key-..."
-                  />
-                </div>
-              </div>
-            </TabsContent>
-
-            {/* Postmark Settings */}
-            <TabsContent value="postmark" className="space-y-4">
-              <div>
-                <Label htmlFor="postmarkToken">Postmark Server Token</Label>
+              <div className="space-y-2">
+                <Label htmlFor="smtpPassword">SMTP Password *</Label>
                 <Input
-                  id="postmarkToken"
+                  id="smtpPassword"
                   type="password"
-                  {...form.register('postmark.serverToken')}
-                  placeholder="..."
+                  placeholder="••••••••"
+                  {...register('smtpPassword')}
                 />
-              </div>
-            </TabsContent>
-          </Tabs>
-
-          {/* Email Templates */}
-          <div className="mt-6">
-            <h3 className="text-lg font-semibold mb-4">Email Templates</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center space-x-2">
-                <Switch
-                  checked={form.watch('templates.welcomeEmail')}
-                  onCheckedChange={(checked) => form.setValue('templates.welcomeEmail', checked)}
-                />
-                <Label>Welcome Email</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch
-                  checked={form.watch('templates.passwordReset')}
-                  onCheckedChange={(checked) => form.setValue('templates.passwordReset', checked)}
-                />
-                <Label>Password Reset</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch
-                  checked={form.watch('templates.emailVerification')}
-                  onCheckedChange={(checked) => form.setValue('templates.emailVerification', checked)}
-                />
-                <Label>Email Verification</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch
-                  checked={form.watch('templates.notificationEmail')}
-                  onCheckedChange={(checked) => form.setValue('templates.notificationEmail', checked)}
-                />
-                <Label>Notification Email</Label>
+                {errors.smtpPassword && (
+                  <p className="text-sm text-red-600">{errors.smtpPassword.message}</p>
+                )}
               </div>
             </div>
-          </div>
 
-          {/* Test Result */}
-          {testResult && (
-            <div className={`mt-4 p-3 rounded-md ${
-              testResult.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
-            }`}>
-              <div className="flex items-center">
-                <AlertCircle className="h-4 w-4 mr-2" />
-                {testResult.message}
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="smtpEncryption">Encryption</Label>
+              <Select
+                value={watchedValues.smtpEncryption}
+                onValueChange={(value) => setValue('smtpEncryption', value as any)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="tls">TLS</SelectItem>
+                  <SelectItem value="ssl">SSL</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex justify-between mt-6">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleTest}
-              disabled={!watchedEnabled || testing}
-            >
-              <TestTube className="h-4 w-4 mr-2" />
-              {testing ? 'Testing...' : 'Test Email'}
-            </Button>
-            <Button type="submit" disabled={isLoading}>
-              <Settings className="h-4 w-4 mr-2" />
-              {isLoading ? 'Saving...' : 'Save Settings'}
-            </Button>
-          </div>
+          </FormSection>
         </CardContent>
       </Card>
+
+      {/* Email Identity */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Email Identity</CardTitle>
+          <CardDescription>
+            Configure how emails appear to recipients
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <FormSection>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="fromName">From Name *</Label>
+                <Input
+                  id="fromName"
+                  placeholder="Modular App"
+                  {...register('fromName')}
+                />
+                {errors.fromName && (
+                  <p className="text-sm text-red-600">{errors.fromName.message}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fromEmail">From Email *</Label>
+                <Input
+                  id="fromEmail"
+                  type="email"
+                  placeholder="noreply@example.com"
+                  {...register('fromEmail')}
+                />
+                {errors.fromEmail && (
+                  <p className="text-sm text-red-600">{errors.fromEmail.message}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="replyToEmail">Reply-To Email</Label>
+              <Input
+                id="replyToEmail"
+                type="email"
+                placeholder="support@example.com"
+                {...register('replyToEmail')}
+              />
+              {errors.replyToEmail && (
+                <p className="text-sm text-red-600">{errors.replyToEmail.message}</p>
+              )}
+            </div>
+          </FormSection>
+        </CardContent>
+      </Card>
+
+      {/* Email Features */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Email Features</CardTitle>
+          <CardDescription>
+            Enable or disable email functionality
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <FormSection>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Email Notifications</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Send system notifications via email
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  {...register('enableEmailNotifications')}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Email Digests</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Send daily/weekly digest emails
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  {...register('enableEmailDigests')}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Email Marketing</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Allow marketing emails to subscribers
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  {...register('enableEmailMarketing')}
+                />
+              </div>
+            </div>
+          </FormSection>
+        </CardContent>
+      </Card>
+
+      {/* Template & Styling */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Template & Styling</CardTitle>
+          <CardDescription>
+            Customize email appearance and branding
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <FormSection>
+            <div className="space-y-2">
+              <Label htmlFor="emailTemplate">Email Template</Label>
+              <Select
+                value={watchedValues.emailTemplate}
+                onValueChange={(value) => setValue('emailTemplate', value as any)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default</SelectItem>
+                  <SelectItem value="modern">Modern</SelectItem>
+                  <SelectItem value="minimal">Minimal</SelectItem>
+                  <SelectItem value="corporate">Corporate</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="emailFooter">Email Footer</Label>
+              <Textarea
+                id="emailFooter"
+                placeholder="© 2025 Your Company. All rights reserved."
+                rows={3}
+                {...register('emailFooter')}
+              />
+              {errors.emailFooter && (
+                <p className="text-sm text-red-600">{errors.emailFooter.message}</p>
+              )}
+            </div>
+          </FormSection>
+        </CardContent>
+      </Card>
+
+      {/* Rate Limiting */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Rate Limiting
+          </CardTitle>
+          <CardDescription>
+            Prevent email abuse and protect your sending reputation
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <FormSection>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Enable Rate Limiting</Label>
+                <p className="text-sm text-muted-foreground">
+                  Limit the number of emails sent per hour
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                {...register('enableRateLimiting')}
+              />
+            </div>
+
+            {watchedValues.enableRateLimiting && (
+              <div className="space-y-2">
+                <Label htmlFor="maxEmailsPerHour">Max Emails per Hour</Label>
+                <Input
+                  id="maxEmailsPerHour"
+                  type="number"
+                  placeholder="100"
+                  {...register('maxEmailsPerHour', { valueAsNumber: true })}
+                />
+                {errors.maxEmailsPerHour && (
+                  <p className="text-sm text-red-600">{errors.maxEmailsPerHour.message}</p>
+                )}
+              </div>
+            )}
+          </FormSection>
+        </CardContent>
+      </Card>
+
+      {/* Test Email */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TestTube className="h-5 w-5" />
+            Test Email
+          </CardTitle>
+          <CardDescription>
+            Send a test email to verify your configuration
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <FormSection>
+            <div className="flex gap-4">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="testEmail">Test Email Address</Label>
+                <Input
+                  id="testEmail"
+                  type="email"
+                  placeholder="test@example.com"
+                  {...register('testEmail')}
+                />
+                {errors.testEmail && (
+                  <p className="text-sm text-red-600">{errors.testEmail.message}</p>
+                )}
+              </div>
+              <div className="flex items-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleTestEmail}
+                  disabled={isTesting || !watchedValues.testEmail}
+                >
+                  <TestTube className="h-4 w-4 mr-2" />
+                  {isTesting ? 'Testing...' : 'Send Test'}
+                </Button>
+              </div>
+            </div>
+
+            {testResult && (
+              <div className={`flex items-center gap-2 p-3 rounded-md ${
+                testResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+              }`}>
+                <AlertCircle className="h-4 w-4" />
+                <p className="text-sm">{testResult.message}</p>
+              </div>
+            )}
+          </FormSection>
+        </CardContent>
+      </Card>
+
+      {/* Save Button */}
+      <div className="flex justify-end gap-4">
+        <Button type="submit" disabled={isLoading || !isDirty}>
+          <Settings className="h-4 w-4 mr-2" />
+          {isLoading ? 'Saving...' : 'Save Email Settings'}
+        </Button>
+      </div>
     </form>
   );
 }

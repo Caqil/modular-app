@@ -168,6 +168,7 @@ const TabsNav = React.forwardRef<HTMLDivElement, TabsNavProps>(
           window.removeEventListener('resize', checkScrollButtons);
         };
       }
+      return undefined;
     }, [scrollable, checkScrollButtons]);
 
     const scrollTabs = (direction: 'left' | 'right') => {
@@ -354,13 +355,20 @@ const TabsContainer = React.forwardRef<HTMLDivElement, TabsContainerProps>(
           if (React.isValidElement(child)) {
             if (child.type === TabsNav) {
               return React.cloneElement(child, {
+                ...child.props,
                 activeTab: currentValue,
                 onTabChange: handleValueChange,
+              } as React.ComponentProps<typeof TabsNav> & {
+                activeTab: string;
+                onTabChange: (value: string) => void;
               });
             }
             if (child.type === TabContent) {
               return React.cloneElement(child, {
+                ...child.props,
                 activeValue: currentValue,
+              } as React.ComponentProps<typeof TabContent> & {
+                activeValue: string;
               });
             }
           }
