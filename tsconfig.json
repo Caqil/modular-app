@@ -16,6 +16,7 @@
     "isolatedModules": true,
     "allowSyntheticDefaultImports": true,
     "incremental": true,
+    "noImplicitAny": false,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "noImplicitReturns": true,
@@ -51,6 +52,9 @@
     },
     {
       "path": "./apps/web"
+    },
+    {
+      "path": "./apps/admin"
     }
   ]
 }

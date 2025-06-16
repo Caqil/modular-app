@@ -12,10 +12,19 @@ export async function middleware(request: NextRequest) {
   }
 
   // Check authentication for protected routes
+  const secret = process.env.NEXTAUTH_SECRET
+  if (!secret) {
+    throw new Error('NEXTAUTH_SECRET environment variable is not set')
+  }
+  interface MyToken {
+    roles?: string[]
+    [key: string]: any
+  }
+
   const token = await getToken({
     req: request,
-    secret: process.env.NEXTAUTH_SECRET,
-  })
+    secret,
+  }) as MyToken | null
 
   if (!token) {
     const loginUrl = new URL('/auth/login', request.url)
@@ -24,7 +33,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Check admin role
-  if (!token.roles?.includes('admin')) {
+  if (!(token.roles ?? []).includes('admin')) {
     return NextResponse.json(
       { error: 'Access denied. Admin role required.' },
       { status: 403 }

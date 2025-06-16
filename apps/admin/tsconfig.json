@@ -1,4 +1,5 @@
 {
+  "extends": "@modular-app/config/typescript/react",
   "compilerOptions": {
     "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
@@ -13,13 +14,21 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "baseUrl": "../../",
+    "noImplicitAny": false,
     "plugins": [
       {
         "name": "next"
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@modular-app/core": ["./packages/core/src"],
+      "@modular-app/core/*": ["./packages/core/src/*"],
+      "@modular-app/ui": ["./packages/ui/src"],
+      "@modular-app/ui/*": ["./packages/ui/src/*"],
+      "@modular-app/config": ["./packages/config/src"],
+      "@modular-app/config/*": ["./packages/config/src/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

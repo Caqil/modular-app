@@ -92,6 +92,7 @@ export type {
   LoginCredentials,
   RegisterData,
   PasswordReset,
+  PasswordResetRequest,
   EmailVerification,
 } from './types/user';
 
