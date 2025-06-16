@@ -14,6 +14,7 @@ import {
   ThemeEvent,
   ThemeSettings 
 } from './theme-types';
+import ConfigManager from '../config/config-manager';
 
 export interface ThemeManagerConfig {
   themesDirectory: string;
@@ -76,13 +77,13 @@ export class ThemeManager {
       }
 
       // Load configuration
-      const config = this.config.get('themes', this.defaultConfig);
+      const config = await this.config.get('themes', this.defaultConfig);
 
       // Ensure themes directory exists
       await fs.ensureDir(config.themesDirectory);
 
       // Auto-load themes if enabled
-      if (config.autoLoad) {
+      if ((await config).autoLoad) {
         await this.loadAllThemes();
         await this.activateActiveTheme();
       }
@@ -134,7 +135,7 @@ export class ThemeManager {
    * Load all themes from directory
    */
   public async loadAllThemes(): Promise<ThemeOperationResult[]> {
-    const config = this.config.get('themes', this.defaultConfig);
+    const config = await this.config.get('themes', this.defaultConfig);
     const results: ThemeOperationResult[] = [];
 
     try {
@@ -581,7 +582,7 @@ export class ThemeManager {
         await this.activateTheme(activeTheme.name);
       } else {
         // Activate default theme
-        const config = this.config.get('themes', this.defaultConfig);
+        const config = await this.config.get('themes', this.defaultConfig);
         if (this.registry.has(config.defaultTheme)) {
           await this.activateTheme(config.defaultTheme);
         }

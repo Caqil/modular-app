@@ -146,7 +146,8 @@ export class EventManager {
   };
 
   private constructor() {
-    const config = this.config.get('events', this.defaultConfig);
+    // Use defaultConfig synchronously for constructor, async config loading in initialize()
+    const config = this.defaultConfig;
     this.emitter = new EventEmitter(config.emitter);
     this.setupMiddleware(config.middleware);
   }
@@ -174,7 +175,7 @@ export class EventManager {
       await this.setupCoreEventListeners();
 
       // Setup persistence if enabled
-      const config = this.config.get('events', this.defaultConfig);
+      const config = await this.config.get('events', this.defaultConfig);
       if (config.persistence.enabled) {
         await this.setupPersistence(config.persistence);
       }
@@ -702,7 +703,7 @@ export class EventManager {
    * Persist event
    */
   private async persistEvent(event: Event): Promise<void> {
-    const config = this.config.get('events', this.defaultConfig);
+    const config = await this.config.get('events', this.defaultConfig);
     if (!config.persistence.enabled) return;
 
     try {
@@ -788,7 +789,7 @@ export class EventManager {
    * Broadcast event
    */
   private async broadcastEvent(event: Event): Promise<void> {
-    const config = this.config.get('events', this.defaultConfig);
+    const config = await this.config.get('events', this.defaultConfig);
     if (!config.broadcasting.enabled) return;
 
     try {
@@ -893,7 +894,7 @@ export class EventManager {
     limit?: number;
     offset?: number;
   }): Promise<Event[]> {
-    const config = this.config.get('events', this.defaultConfig);
+    const config = await this.config.get('events', this.defaultConfig);
     if (!config.persistence.enabled) return [];
 
     try {

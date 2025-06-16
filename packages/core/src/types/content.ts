@@ -144,14 +144,32 @@ export interface ContentQuery {
 }
 
 export interface ContentStats {
-  total: number;
-  published: number;
-  draft: number;
-  private: number;
-  trash: number;
-  byAuthor: Record<string, number>;
-  byCategory: Record<string, number>;
-  byMonth: Record<string, number>;
+  posts: {
+    total: number;
+    published: number;
+    draft: number;
+    pending: number;
+  };
+  pages: {
+    total: number;
+    published: number;
+    draft: number;
+  };
+  categories: number;
+  tags: number;
+  comments: {
+    total: number;
+    approved: number;
+    pending: number;
+    spam: number;
+  };
+  recentActivity: Array<{
+    type: 'post' | 'page' | 'comment';
+    action: 'created' | 'updated' | 'published';
+    title: string;
+    author: string;
+    timestamp: Date;
+  }>;
 }
 
 export interface ContentMeta {

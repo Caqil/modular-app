@@ -3,8 +3,8 @@ import path from 'path';
 import { Logger } from '../../utils/logger';
 import { EventManager } from '../../events/event-manager';
 import { EventType } from '../../events/event-types';
-import { Migration, MigrationRecord } from '../../types/database';
-
+import { Migration } from '../../types/database';
+import { fs } from 'fs-extra';
 // Migration record interface for database storage
 export interface IMigrationRecord extends Document {
   version: string;

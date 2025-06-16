@@ -30,8 +30,10 @@
   "devDependencies": {
     "@modular-app/config": "*",
     "@types/bcryptjs": "^2.4.6",
+    "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.5",
     "@types/mime-types": "^2.1.4",
+    "@types/multer": "^1.4.13",
     "tsup": "^8.0.1",
     "typescript": "^5.3.3"
   },

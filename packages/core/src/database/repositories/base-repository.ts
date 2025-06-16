@@ -5,7 +5,7 @@ import type {
   PaginationOptions,
   SearchOptions,
   AggregationPipeline,
-} from '../types/database';
+} from '../../types/database';
 import Logger from '../../utils/logger';
 import { EventManager } from '../../events/event-manager';
 import { PaginatedResult, QueryOptions } from '../../types/database';

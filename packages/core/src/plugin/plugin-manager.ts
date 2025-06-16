@@ -650,13 +650,13 @@ export class PluginManager {
     if (!plugin.hooks) return;
 
     for (const [hookName, callback] of Object.entries(plugin.hooks)) {
-      this.hooks.addAction(hookName, callback, 10, pluginName);
+      this.hooks.addAction(hookName, callback as import('./plugin-hooks').HookCallback, 10, pluginName);
     }
 
     if (!plugin.filters) return;
 
     for (const [filterName, callback] of Object.entries(plugin.filters)) {
-      this.hooks.addFilter(filterName, callback, 10, pluginName);
+      this.hooks.addFilter(filterName, callback as import('./plugin-hooks').HookCallback, 10, pluginName);
     }
   }
 
