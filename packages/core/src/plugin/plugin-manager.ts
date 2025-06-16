@@ -82,10 +82,10 @@ export class PluginManager {
       const config = this.config.get('plugins', this.defaultConfig);
 
       // Ensure plugins directory exists
-      await fs.ensureDir(config.pluginsDirectory);
+      await fs.ensureDir((await config).pluginsDirectory);
 
       // Auto-load plugins if enabled
-      if (config.autoLoad) {
+      if ((await config).autoLoad) {
         await this.loadAllPlugins();
         await this.activateEnabledPlugins();
       }
@@ -144,9 +144,9 @@ export class PluginManager {
     const results: PluginOperationResult[] = [];
 
     try {
-      this.logger.info(`Loading plugins from: ${config.pluginsDirectory}`);
+      this.logger.info(`Loading plugins from: ${(await config).pluginsDirectory}`);
 
-      const loadedPlugins = await this.loader.loadPluginsFromDirectory(config.pluginsDirectory);
+      const loadedPlugins = await this.loader.loadPluginsFromDirectory((await config).pluginsDirectory);
 
       for (const loadedPlugin of loadedPlugins) {
         try {

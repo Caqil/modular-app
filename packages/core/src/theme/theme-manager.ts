@@ -509,16 +509,21 @@ export class ThemeManager {
     isActive: boolean;
     screenshot?: string;
   }> {
-    return Array.from(this.registry.getAll().values()).map(entry => ({
-      name: entry.manifest.name,
-      title: entry.manifest.title,
-      version: entry.manifest.version,
-      status: entry.status,
-      author: entry.manifest.author,
-      description: entry.manifest.description,
-      isActive: entry.isActive,
-      screenshot: entry.manifest.screenshot,
-    }));
+    return Array.from(this.registry.getAll().values()).map(entry => {
+      const theme = {
+        name: entry.manifest.name,
+        title: entry.manifest.title,
+        version: entry.manifest.version,
+        status: entry.status,
+        author: entry.manifest.author,
+        description: entry.manifest.description,
+        isActive: entry.isActive,
+      };
+      if (entry.manifest.screenshot) {
+        return { ...theme, screenshot: entry.manifest.screenshot };
+      }
+      return theme;
+    });
   }
 
   /**

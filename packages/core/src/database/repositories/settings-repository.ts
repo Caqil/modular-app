@@ -339,7 +339,315 @@ export class SettingsRepository extends BaseRepository<ISetting> {
       throw error;
     }
   }
+/**
+ * Set setting value (create if not exists, update if exists)
+ * This is an upsert operation that handles both creation and updates
+ */
+async setSetting(
+  key: string,
+  value: any,
+  options?: {
+    type?: ISetting['type'];
+    description?: string;
+    group?: string;
+    public?: boolean;
+    editable?: boolean;
+    force?: boolean; // Allow updating non-editable settings
+  }
+): Promise<ISetting> {
+  try {
+    const normalizedKey = key.toLowerCase().trim();
 
+    // Validate key format
+    if (!this.isValidKey(normalizedKey)) {
+      throw new Error('Invalid setting key format');
+    }
+
+    // Check if setting already exists
+    const existingSetting = await this.findOne({ key: normalizedKey });
+
+    if (existingSetting) {
+      // Setting exists - update it
+      
+      // Check if setting is editable (unless force is true)
+      if (!existingSetting.editable && !options?.force) {
+        throw new Error(`Setting '${key}' is not editable. Use force option to override.`);
+      }
+
+      // Validate and sanitize value based on existing type
+      const settingType = options?.type || existingSetting.type;
+      const validatedValue = this.validateValue(value, settingType);
+
+      // Update the setting
+      const updatedSetting = await this.updateOne(
+        { key: normalizedKey },
+        { 
+          value: validatedValue,
+          ...(options?.type && { type: options.type }),
+          ...(options?.description && { description: Sanitizer.sanitizeText(options.description) }),
+          ...(options?.group && { group: Sanitizer.sanitizeText(options.group).toLowerCase() }),
+          ...(options?.public !== undefined && { public: options.public }),
+          ...(options?.editable !== undefined && { editable: options.editable }),
+        }
+      );
+
+      if (!updatedSetting) {
+        throw new Error(`Failed to update setting '${key}'`);
+      }
+
+      // Update cache
+      this.setCacheValue(normalizedKey, validatedValue);
+
+      this.logger.debug('Setting updated via setSetting', {
+        key: normalizedKey,
+        oldValue: existingSetting.value,
+        newValue: validatedValue,
+        type: settingType,
+      });
+
+      // Emit setting change event
+      if (this.events) {
+        await this.events.emit('setting:changed', {
+          key: normalizedKey,
+          oldValue: existingSetting.value,
+          newValue: validatedValue,
+          type: settingType,
+          action: 'updated',
+          timestamp: new Date(),
+        });
+      }
+
+      return updatedSetting;
+
+    } else {
+      // Setting doesn't exist - create it
+      
+      const settingType = options?.type || 'string';
+      const description = options?.description || `Setting: ${key}`;
+      const group = options?.group || 'general';
+      const isPublic = options?.public || false;
+      const editable = options?.editable !== undefined ? options.editable : true;
+
+      // Validate and sanitize value
+      const validatedValue = this.validateValue(value, settingType);
+      
+      const settingData: Partial<ISetting> = {
+        key: normalizedKey,
+        value: validatedValue,
+        type: settingType,
+        description: Sanitizer.sanitizeText(description),
+        group: Sanitizer.sanitizeText(group).toLowerCase(),
+        public: isPublic,
+        editable,
+      };
+
+      const newSetting = await this.create(settingData);
+
+      // Update cache
+      this.setCacheValue(normalizedKey, validatedValue);
+
+      this.logger.debug('Setting created via setSetting', {
+        key: normalizedKey,
+        value: validatedValue,
+        type: settingType,
+        group,
+        public: isPublic,
+      });
+
+      // Emit setting creation event
+      if (this.events) {
+        await this.events.emit('setting:created', {
+          key: normalizedKey,
+          value: validatedValue,
+          type: settingType,
+          group,
+          public: isPublic,
+          action: 'created',
+          timestamp: new Date(),
+        });
+      }
+
+      return newSetting;
+    }
+
+  } catch (error) {
+    this.logger.error('Error in setSetting:', error);
+    throw error;
+  }
+}
+
+/**
+ * Set multiple settings at once
+ * Convenience method for bulk upsert operations
+ */
+async setSettings(
+  settings: Record<string, any> | Array<{
+    key: string;
+    value: any;
+    type?: ISetting['type'];
+    description?: string;
+    group?: string;
+    public?: boolean;
+    editable?: boolean;
+  }>,
+  options?: {
+    force?: boolean;
+    continueOnError?: boolean;
+  }
+): Promise<{
+  successful: Array<{ key: string; action: 'created' | 'updated'; setting: ISetting }>;
+  failed: Array<{ key: string; error: string }>;
+}> {
+  const results = {
+    successful: [] as Array<{ key: string; action: 'created' | 'updated'; setting: ISetting }>,
+    failed: [] as Array<{ key: string; error: string }>,
+  };
+
+  let settingsArray: Array<{
+    key: string;
+    value: any;
+    type?: ISetting['type'];
+    description?: string;
+    group?: string;
+    public?: boolean;
+    editable?: boolean;
+  }>;
+
+  // Convert Record to Array format if needed
+  if (Array.isArray(settings)) {
+    settingsArray = settings;
+  } else {
+    settingsArray = Object.entries(settings).map(([key, value]) => ({
+      key,
+      value,
+    }));
+  }
+
+  for (const settingData of settingsArray) {
+    try {
+      // Check if setting exists to determine action
+      const existingSetting = await this.findOne({ key: settingData.key.toLowerCase().trim() });
+      const action = existingSetting ? 'updated' : 'created';
+
+      const settingOptions = {
+        ...(settingData.type && { type: settingData.type }),
+        ...(settingData.description && { description: settingData.description }),
+        ...(settingData.group && { group: settingData.group }),
+        ...(settingData.public !== undefined && { public: settingData.public }),
+        ...(settingData.editable !== undefined && { editable: settingData.editable }),
+        ...(options?.force !== undefined && { force: options.force }),
+      };
+
+      const setting = await this.setSetting(settingData.key, settingData.value, settingOptions);
+
+      results.successful.push({
+        key: settingData.key,
+        action,
+        setting,
+      });
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      results.failed.push({
+        key: settingData.key,
+        error: errorMessage,
+      });
+
+      this.logger.error(`Failed to set setting '${settingData.key}':`, error);
+
+      // Stop on first error unless continueOnError is true
+      if (!options?.continueOnError) {
+        break;
+      }
+    }
+  }
+
+  this.logger.info('Bulk setSetting completed', {
+    total: settingsArray.length,
+    successful: results.successful.length,
+    failed: results.failed.length,
+  });
+
+  return results;
+}
+
+/**
+ * Set setting with type inference from value
+ * Convenience method that automatically determines the type
+ */
+async setSettingAuto(
+  key: string,
+  value: any,
+  options?: {
+    description?: string;
+    group?: string;
+    public?: boolean;
+    editable?: boolean;
+    force?: boolean;
+  }
+): Promise<ISetting> {
+  // Infer type from value
+  let inferredType: ISetting['type'] = 'string';
+
+  if (typeof value === 'number') {
+    inferredType = 'number';
+  } else if (typeof value === 'boolean') {
+    inferredType = 'boolean';
+  } else if (typeof value === 'object' && value !== null) {
+    inferredType = 'json';
+  } else if (typeof value === 'string') {
+    // Try to parse as JSON first
+    try {
+      JSON.parse(value);
+      inferredType = 'json';
+    } catch {
+      inferredType = 'string';
+    }
+  }
+
+  return this.setSetting(key, value, {
+    ...options,
+    type: inferredType,
+  });
+}
+
+/**
+ * Helper method to check if a setting can be modified
+ */
+async canModifySetting(key: string, force: boolean = false): Promise<{
+  canModify: boolean;
+  reason?: string;
+  setting?: ISetting;
+}> {
+  try {
+    const normalizedKey = key.toLowerCase().trim();
+    const setting = await this.findOne({ key: normalizedKey });
+
+    if (!setting) {
+      return { canModify: true }; // Can create new setting
+    }
+
+    if (!setting.editable && !force) {
+      return {
+        canModify: false,
+        reason: 'Setting is not editable',
+        setting,
+      };
+    }
+
+    return {
+      canModify: true,
+      setting,
+    };
+
+  } catch (error) {
+    return {
+      canModify: false,
+      reason: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
   /**
    * Bulk update settings
    */

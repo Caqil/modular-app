@@ -62,7 +62,7 @@ export class HookManager {
 
       // Setup monitoring if enabled
       const config = this.config.get('hooks', this.defaultConfig);
-      if (config.enableMetrics) {
+      if ((await config).enableMetrics) {
         await this.setupMetrics();
       }
 
@@ -110,14 +110,14 @@ export class HookManager {
   /**
    * Add action hook
    */
-  public addAction(
+  public async addAction(
     hookName: string | CoreHooks,
     callback: HookCallback,
     priority: number = 10,
     plugin: string = 'core',
     options?: Omit<HookRegistrationOptions, 'priority'>
-  ): string {
-    const config = this.config.get('hooks', this.defaultConfig);
+  ): Promise<string> {
+    const config = await this.config.get('hooks', this.defaultConfig);
     
     return this.actionHooks.addAction(
       hookName as string,
@@ -144,7 +144,7 @@ export class HookManager {
   public async doAction(hookName: string | CoreHooks, ...args: any[]): Promise<void> {
     const config = this.config.get('hooks', this.defaultConfig);
     
-    if (config.enableDebugging) {
+    if ((await config).enableDebugging) {
       this.logger.debug(`Executing action: ${hookName}`, { args: args.length });
     }
 
@@ -154,14 +154,14 @@ export class HookManager {
   /**
    * Add filter hook
    */
-  public addFilter(
+  public async addFilter(
     filterName: string | CoreFilters,
     callback: FilterCallback,
     priority: number = 10,
     plugin: string = 'core',
     options?: Omit<FilterRegistrationOptions, 'priority'>
-  ): string {
-    const config = this.config.get('hooks', this.defaultConfig);
+  ): Promise<string> {
+    const config = await this.config.get('hooks', this.defaultConfig);
     
     return this.filterHooks.addFilter(
       filterName as string,
@@ -192,7 +192,7 @@ export class HookManager {
   ): Promise<any> {
     const config = this.config.get('hooks', this.defaultConfig);
     
-    if (config.enableDebugging) {
+    if ((await config).enableDebugging) {
       this.logger.debug(`Applying filters: ${filterName}`, { 
         originalType: typeof value,
         args: args.length,
@@ -542,8 +542,8 @@ export class HookManager {
    * Create hook namespace for plugin
    */
   public createNamespace(plugin: string): {
-    addAction: (hookName: string, callback: HookCallback, priority?: number, options?: Omit<HookRegistrationOptions, 'priority'>) => string;
-    addFilter: (filterName: string, callback: FilterCallback, priority?: number, options?: Omit<FilterRegistrationOptions, 'priority'>) => string;
+    addAction: (hookName: string, callback: HookCallback, priority?: number, options?: Omit<HookRegistrationOptions, 'priority'>) => Promise<string>;
+    addFilter: (filterName: string, callback: FilterCallback, priority?: number, options?: Omit<FilterRegistrationOptions, 'priority'>) => Promise<string>;
     removeAction: (hookName: string, hookId: string) => boolean;
     removeFilter: (filterName: string, filterId: string) => boolean;
     doAction: (hookName: string, ...args: any[]) => Promise<void>;
