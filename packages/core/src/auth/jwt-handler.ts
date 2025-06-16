@@ -63,7 +63,6 @@ export class JWTHandler {
       ...config,
     };
   }
-
   /**
    * Generate access and refresh tokens for user
    */
