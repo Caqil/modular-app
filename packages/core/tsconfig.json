@@ -3,8 +3,15 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "noImplicitAny": false,
-    "types": ["node", "express", "multer"]
+    "baseUrl": ".",
+    "paths": {
+      "@modular-app/config": ["../config/src"],
+      "@modular-app/config/*": ["../config/src/*"]
+    },
+    "types": ["node", "express", "multer"],
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]

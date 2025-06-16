@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useThemeSettings } from "../hooks/use-theme-settings";
+import { useThemeSettings } from "../../hooks/use-theme-settings";
 
 interface ContentAreaProps {
   children: React.ReactNode;

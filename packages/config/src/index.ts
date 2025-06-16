@@ -1,7 +1,22 @@
+// Re-export configuration utilities
+export const configs = {
+  // TypeScript configurations are JSON files
+  // ESLint and other configs are JS modules
+  eslint: {
+    base: './eslint/base.js',
+    react: './eslint/react.js', 
+    node: './eslint/node.js',
+  },
+  prettier: './prettier/index.js',
+  tailwind: {
+    base: './tailwind/base.js',
+    preset: './tailwind/preset.js',
+  },
+  typescript: {
+    base: './typescript/base.json',
+    react: './typescript/react.json',
+    node: './typescript/node.json',
+  },
+} as const;
 
-export { default as eslintBase } from './eslint/base.js';
-export { default as eslintReact } from './eslint/react.js';
-export { default as eslintNode } from './eslint/node.js';
-export { default as tailwindBase } from './tailwind/base.js';
-export { default as tailwindPreset } from './tailwind/preset.js';
-export { default as prettierConfig } from './prettier/index.js';
+export default configs;

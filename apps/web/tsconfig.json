@@ -3,14 +3,34 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@/components/*": ["./src/components/*"],
-      "@/lib/*": ["./src/lib/*"],
-      "@/hooks/*": ["./src/hooks/*"],
-      "@/types/*": ["./src/types/*"],
-      "@/utils/*": ["./src/utils/*"],
-      "@/styles/*": ["./src/styles/*"]
-    }
+      "@/*": [
+        "./src/*"
+      ],
+      "@modular-app/core": [
+        "../../packages/core/src"
+      ],
+      "@modular-app/core/*": [
+        "../../packages/core/src/*"
+      ],
+      "@modular-app/ui": [
+        "../../packages/ui/src"
+      ],
+      "@modular-app/ui/*": [
+        "../../packages/ui/src/*"
+      ],
+      "@modular-app/config": [
+        "../../packages/config/src"
+      ],
+      "@modular-app/config/*": [
+        "../../packages/config/src/*"
+      ]
+    },
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "incremental": true
   },
   "include": [
     "next-env.d.ts",
@@ -19,10 +39,6 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules",
-    ".next",
-    "out",
-    "dist",
-    "build"
+    "node_modules"
   ]
 }

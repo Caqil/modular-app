@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import { IPage } from "@modular-app/core/database/models";
-import ThemeHelpers from "../theme-helpers";
 import { Calendar, User, Edit } from "lucide-react";
+import { ThemeHelpers } from "../..";
+import { IPage } from '@modular-app/core/database/models';
 
 interface PageSingleProps {
   page: IPage;
