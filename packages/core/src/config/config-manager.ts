@@ -389,7 +389,7 @@ export class ConfigManager extends EventEmitter {
   /**
    * Clear all overrides
    */
-  public clearOverrides(): void {
+  public clearOverrides(): void { 
     this.overrides.clear();
     this.clearCache();
     this.logger.debug('All configuration overrides cleared');

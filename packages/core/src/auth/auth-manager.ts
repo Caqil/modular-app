@@ -3,13 +3,19 @@
 // ===================================================================
 
 import crypto from 'crypto';
+import { Types } from 'mongoose';
 import { Logger } from '../utils/logger';
 import { EventManager } from '../events/event-manager';
 import { ConfigManager } from '../config/config-manager';
 import { CacheManager } from '../cache/cache-manager';
+import { HookManager } from '../hooks/hook-manager';
 import { Validator } from '../utils/validator';
 import { Sanitizer } from '../utils/sanitizer';
-import { User, type IUser } from '../database/models';
+import { DateUtils } from '../utils/date-utils';
+import { EventType } from '../events/event-types';
+import { CoreHooks, CoreFilters } from '../hooks/hook-types';
+import { UserRepository } from '../database/repositories/user-repository';
+import { type IUser } from '../database/models';
 import { UserRole, UserStatus } from '../types/user';
 import { JWTHandler } from './jwt-handler';
 import { PasswordHandler } from './password-handler';
@@ -34,6 +40,8 @@ import {
   OAuthState,
   PasswordResetRequest,
   EmailVerificationRequest,
+  AuthAttempt,
+  LoginAttempt,
 } from './auth-types';
 
 export interface AuthManagerConfig extends AuthConfig {
@@ -45,6 +53,31 @@ export interface AuthManagerConfig extends AuthConfig {
   enableOAuth: boolean;
   sessionCleanupInterval: number; // in minutes
   metricsEnabled: boolean;
+  maxFailedAttempts: number;
+  lockoutDuration: number; // in minutes
+  cleanupExpiredData: boolean;
+  cleanupInterval: number; // in minutes
+}
+
+export interface RegistrationData {
+  email: string;
+  username: string;
+  password: string;
+  firstName?: string;
+  lastName?: string;
+  acceptTerms?: boolean;
+  inviteCode?: string;
+}
+
+export interface AuthStats {
+  totalUsers: number;
+  activeUsers: number;
+  newUsersToday: number;
+  loginAttemptsToday: number;
+  successfulLoginsToday: number;
+  failedLoginsToday: number;
+  lockedAccounts: number;
+  activeSessions: number;
 }
 
 /**
@@ -57,24 +90,30 @@ export class AuthManager {
   private events = EventManager.getInstance();
   private config = ConfigManager.getInstance();
   private cache = CacheManager.getInstance();
-  private jwtHandler: JWTHandler;
-  private passwordHandler: PasswordHandler;
-  private permissionManager: PermissionManager;
+  private hooks = HookManager.getInstance();
+  private userRepo = new UserRepository();
+  private jwtHandler!: JWTHandler;
+  private passwordHandler!: PasswordHandler;
+  private permissionManager!: PermissionManager;
   private initialized = false;
-  private managerConfig: AuthManagerConfig;
+  private managerConfig!: AuthManagerConfig;
   private middleware: AuthMiddleware[] = [];
   private activeSessions = new Map<string, AuthSession>();
   private oauthStates = new Map<string, OAuthState>();
   private passwordResets = new Map<string, PasswordResetRequest>();
   private emailVerifications = new Map<string, EmailVerificationRequest>();
+  private loginAttempts = new Map<string, LoginAttempt>();
+  private authAttempts: AuthAttempt[] = [];
   private cleanupInterval: NodeJS.Timeout | null = null;
 
   private readonly defaultConfig: AuthManagerConfig = {
     jwt: {
-      secret: 'your-super-secret-jwt-key-change-this-in-production',
+      secret: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production',
       expiresIn: '7d',
       refreshExpiresIn: '30d',
       algorithm: 'HS256',
+      issuer: 'modular-app',
+      audience: 'modular-app-users',
     },
     bcrypt: {
       rounds: 12,
@@ -119,11 +158,13 @@ export class AuthManager {
     enableOAuth: false,
     sessionCleanupInterval: 60, // 1 hour
     metricsEnabled: true,
+    maxFailedAttempts: 5,
+    lockoutDuration: 15, // minutes
+    cleanupExpiredData: true,
+    cleanupInterval: 30, // 30 minutes
   };
 
-  private constructor() {
-    this.managerConfig = this.defaultConfig;
-  }
+  private constructor() {}
 
   public static getInstance(): AuthManager {
     if (!AuthManager.instance) {
@@ -145,7 +186,7 @@ export class AuthManager {
       this.logger.info('Initializing authentication manager...');
 
       // Load configuration
-      const authConfig = await this.config.get<AuthManagerConfig>('auth');
+      const authConfig = await this.config.get<Partial<AuthManagerConfig>>('auth');
       this.managerConfig = { ...this.defaultConfig, ...authConfig };
 
       // Initialize sub-managers
@@ -169,11 +210,19 @@ export class AuthManager {
         this.startSessionCleanup();
       }
 
+      // Setup data cleanup
+      if (this.managerConfig.cleanupExpiredData) {
+        this.startDataCleanup();
+      }
+
       // Register default middleware
       await this.registerDefaultMiddleware();
 
       // Register event handlers
       await this.registerEventHandlers();
+
+      // Register hooks
+      await this.registerHooks();
 
       this.initialized = true;
       this.logger.info('Authentication manager initialized successfully', {
@@ -181,6 +230,18 @@ export class AuthManager {
         sessionManagement: this.managerConfig.enableSessionManagement,
         twoFactorAuth: this.managerConfig.enableTwoFactorAuth,
         oauth: this.managerConfig.enableOAuth,
+        registration: this.managerConfig.enableRegistration,
+      });
+
+      // Emit initialization event
+      await this.events.emit(EventType.SYSTEM_READY, {
+        timestamp: new Date(),
+        component: 'AuthManager',
+        config: {
+          enableRegistration: this.managerConfig.enableRegistration,
+          enableTwoFactorAuth: this.managerConfig.enableTwoFactorAuth,
+          enableOAuth: this.managerConfig.enableOAuth,
+        },
       });
 
     } catch (error) {
@@ -200,57 +261,69 @@ export class AuthManager {
         ipAddress: credentials.ipAddress,
       });
 
+      // Apply before auth hooks
+      await this.hooks.doAction(CoreHooks.USER_BEFORE_LOGIN, {
+        credentials,
+        ipAddress: credentials.ipAddress,
+        userAgent: credentials.userAgent,
+      });
+
+      const processedCredentials = credentials;
+
       // Apply before auth middleware
-      const processedCredentials = await this.applyBeforeAuthMiddleware(credentials);
+      const finalCredentials = await this.applyBeforeAuthMiddleware(processedCredentials);
 
       // Validate credentials
-      const validation = this.validateCredentials(processedCredentials);
+      const validation = this.validateCredentials(finalCredentials);
       if (!validation.valid) {
-        return this.createAuthError(AuthErrorCode.INVALID_CREDENTIALS, validation.error);
+        await this.recordFailedAttempt(finalCredentials);
+        return this.createAuthError(AuthErrorCode.INVALID_CREDENTIALS, validation.error!);
+      }
+
+      // Check rate limiting
+      const rateLimitCheck = await this.checkRateLimit(finalCredentials);
+      if (!rateLimitCheck.allowed) {
+        return this.createAuthError(AuthErrorCode.RATE_LIMITED, 'Too many login attempts');
       }
 
       // Find user
-      const user = await this.findUserByCredentials(processedCredentials);
+      const user = await this.findUserByCredentials(finalCredentials);
       if (!user) {
-        await this.recordFailedAttempt(processedCredentials);
+        await this.recordFailedAttempt(finalCredentials);
         return this.createAuthError(AuthErrorCode.USER_NOT_FOUND, 'Invalid credentials');
       }
 
       // Check account status
       const statusCheck = this.checkAccountStatus(user);
       if (!statusCheck.valid) {
+        await this.recordFailedAttempt(finalCredentials, user);
         return this.createAuthError(statusCheck.errorCode!, statusCheck.message!);
       }
 
       // Check account lockout
-      if (this.managerConfig.enableAccountLockout && this.passwordHandler.shouldLockAccount(user.id.toString())) {
-        await this.lockAccount(user);
+      if (this.managerConfig.enableAccountLockout && await this.isAccountLocked(user)) {
         return this.createAuthError(AuthErrorCode.ACCOUNT_LOCKED, 'Account locked due to multiple failed attempts');
       }
 
       // Verify password
       const isValidPassword = await this.passwordHandler.verifyPassword(
-        processedCredentials.password,
+        finalCredentials.password,
         user.password
       );
 
       if (!isValidPassword) {
-        this.passwordHandler.recordFailedAttempt(
-          user.id.toString(),
-          processedCredentials.ipAddress,
-          processedCredentials.userAgent
-        );
-        await this.recordFailedAttempt(processedCredentials, user);
+        await this.recordFailedAttempt(finalCredentials, user);
+        await this.incrementFailedAttempts(user);
         return this.createAuthError(AuthErrorCode.INVALID_CREDENTIALS, 'Invalid credentials');
       }
 
       // Check password expiry
-      if (this.passwordHandler.isPasswordExpired(user)) {
+      if (await this.passwordHandler.isPasswordExpired(user)) {
         return this.createAuthError(AuthErrorCode.PASSWORD_EXPIRED, 'Password has expired');
       }
 
       // Check two-factor authentication
-      if (this.managerConfig.enableTwoFactorAuth && user.twoFactorEnabled && !processedCredentials.twoFactorCode) {
+      if (this.managerConfig.enableTwoFactorAuth && user.twoFactorEnabled && !finalCredentials.twoFactorCode) {
         const twoFactorToken = await this.generateTwoFactorToken(user);
         return {
           success: false,
@@ -265,9 +338,10 @@ export class AuthManager {
       }
 
       // Verify two-factor code if provided
-      if (processedCredentials.twoFactorCode) {
-        const twoFactorValid = await this.verifyTwoFactorCode(user, processedCredentials.twoFactorCode);
+      if (finalCredentials.twoFactorCode) {
+        const twoFactorValid = await this.verifyTwoFactorCode(user, finalCredentials.twoFactorCode);
         if (!twoFactorValid) {
+          await this.recordFailedAttempt(finalCredentials, user);
           return this.createAuthError(AuthErrorCode.INVALID_TWO_FACTOR, 'Invalid two-factor code');
         }
       }
@@ -278,14 +352,14 @@ export class AuthManager {
       // Create session
       let session: AuthSession | undefined;
       if (this.managerConfig.enableSessionManagement) {
-        session = await this.createSession(user, tokens, processedCredentials);
+        session = await this.createSession(user, tokens, finalCredentials);
       }
 
       // Update user login stats
-      await this.updateUserLoginStats(user, processedCredentials);
+      await this.updateUserLoginStats(user, finalCredentials);
 
       // Clear failed attempts
-      this.passwordHandler.clearFailedAttempts(user.id.toString());
+      await this.clearFailedAttempts(user);
 
       // Create auth user object
       const authUser = await this.createAuthUser(user);
@@ -300,20 +374,30 @@ export class AuthManager {
       // Apply after auth middleware
       const finalResult = await this.applyAfterAuthMiddleware(result);
 
+      // Apply after auth hooks
+      await this.hooks.doAction(CoreHooks.USER_LOGIN, {
+        user: authUser,
+        session,
+        credentials: finalCredentials,
+      });
+
+      // Record successful attempt
+      await this.recordSuccessfulAttempt(finalCredentials, user);
+
       // Emit success event
-      await this.emitAuthEvent(AuthEventType.LOGIN_SUCCESS, {
+      await this.events.emit(EventType.USER_LOGIN, {
         userId: user.id.toString(),
         email: user.email,
         username: user.username,
-        ipAddress: processedCredentials.ipAddress,
-        userAgent: processedCredentials.userAgent,
+        ipAddress: finalCredentials.ipAddress,
+        userAgent: finalCredentials.userAgent,
         timestamp: new Date(),
       });
 
       this.logger.info('Authentication successful', {
-        userId: user._id,
+        userId: user.id,
         email: user.email,
-        ipAddress: processedCredentials.ipAddress,
+        ipAddress: finalCredentials.ipAddress,
       });
 
       return finalResult;
@@ -340,16 +424,26 @@ export class AuthManager {
       if (!refreshResult.success) {
         return {
           success: false,
-          error: refreshResult.error,
+          error: refreshResult.error || {
+            code: AuthErrorCode.TOKEN_INVALID,
+            message: 'Token refresh failed',
+            timestamp: new Date()
+          },
         };
       }
 
       // Get user from token
       const decoded = this.jwtHandler.decodeToken(refreshResult.tokens!.accessToken);
-      const user = await User.findById(decoded?.sub);
+      const user = await this.userRepo.findById(decoded?.sub!);
 
       if (!user) {
         return this.createAuthError(AuthErrorCode.USER_NOT_FOUND, 'User not found');
+      }
+
+      // Check account status
+      const statusCheck = this.checkAccountStatus(user);
+      if (!statusCheck.valid) {
+        return this.createAuthError(statusCheck.errorCode!, statusCheck.message!);
       }
 
       // Update session if exists
@@ -369,12 +463,13 @@ export class AuthManager {
       const finalResult = await this.applyAfterRefreshMiddleware(result);
 
       // Emit refresh event
-      await this.emitAuthEvent(AuthEventType.TOKEN_REFRESH, {
+      await this.events.emit(EventType.USER_LOGIN, {
         userId: user.id.toString(),
         timestamp: new Date(),
+        metadata: { action: 'token_refresh' },
       });
 
-      this.logger.debug('Token refresh successful', { userId: user._id });
+      this.logger.debug('Token refresh successful', { userId: user.id });
       return finalResult;
 
     } catch (error) {
@@ -424,8 +519,15 @@ export class AuthManager {
         await this.applyAfterLogoutMiddleware(session);
       }
 
+      // Apply logout hooks
+      await this.hooks.doAction(CoreHooks.USER_LOGOUT, {
+        userId,
+        sessionId,
+        timestamp: new Date(),
+      });
+
       // Emit logout event
-      await this.emitAuthEvent(AuthEventType.LOGOUT, {
+      await this.events.emit(EventType.USER_LOGOUT, {
         userId,
         sessionId,
         timestamp: new Date(),
@@ -453,9 +555,15 @@ export class AuthManager {
         };
       }
 
-      const user = await User.findById(validation.payload!.sub);
+      const user = await this.userRepo.findById(validation.payload!.sub);
       if (!user) {
         return this.createAuthError(AuthErrorCode.USER_NOT_FOUND, 'User not found');
+      }
+
+      // Check account status
+      const statusCheck = this.checkAccountStatus(user);
+      if (!statusCheck.valid) {
+        return this.createAuthError(statusCheck.errorCode!, statusCheck.message!);
       }
 
       const authUser = await this.createAuthUser(user);
@@ -474,31 +582,35 @@ export class AuthManager {
   /**
    * Register new user
    */
-  public async register(userData: {
-    email: string;
-    username: string;
-    password: string;
-    firstName?: string;
-    lastName?: string;
-  }): Promise<AuthResult> {
+  public async register(userData: RegistrationData): Promise<AuthResult> {
     try {
       if (!this.managerConfig.enableRegistration) {
         return this.createAuthError(AuthErrorCode.PERMISSION_DENIED, 'Registration is disabled');
       }
 
-      this.logger.debug('User registration attempt', { email: userData.email, username: userData.username });
+      this.logger.debug('User registration attempt', { 
+        email: userData.email, 
+        username: userData.username 
+      });
+
+      // Apply before registration hooks
+      await this.hooks.doAction(CoreHooks.USER_BEFORE_REGISTER, {
+        userData: processedData,
+      });
+
+      const finalUserData = processedData;
 
       // Validate input
-      const validation = this.validateRegistrationData(userData);
+      const validation = this.validateRegistrationData(finalUserData);
       if (!validation.valid) {
-        return this.createAuthError(AuthErrorCode.INVALID_CREDENTIALS, validation.error);
+        return this.createAuthError(AuthErrorCode.INVALID_CREDENTIALS, validation.error!);
       }
 
       // Check if user already exists
-      const existingUser = await User.findOne({
+      const existingUser = await this.userRepo.findOne({
         $or: [
-          { email: userData.email },
-          { username: userData.username },
+          { email: finalUserData.email.toLowerCase() },
+          { username: finalUserData.username },
         ],
       });
 
@@ -507,35 +619,46 @@ export class AuthManager {
       }
 
       // Validate password
-      const passwordValidation = this.passwordHandler.validatePassword(userData.password);
+      const passwordValidation = await this.passwordHandler.validatePassword(finalUserData.password);
       if (!passwordValidation.valid) {
         return this.createAuthError(AuthErrorCode.WEAK_PASSWORD, passwordValidation.errors.join(', '));
       }
 
-      // Hash password
-      const hashedPassword = await this.passwordHandler.hashPassword(userData.password);
-
       // Create user
-      const user = new User({
-        email: userData.email.toLowerCase(),
-        username: userData.username,
-        password: hashedPassword.hash,
+      const user = await this.userRepo.create({
+        email: finalUserData.email.toLowerCase(),
+        username: finalUserData.username,
+        password: finalUserData.password, // Will be hashed in repository
+        firstName: finalUserData.firstName,
+        lastName: finalUserData.lastName,
         role: UserRole.SUBSCRIBER,
         status: this.managerConfig.requireEmailVerification ? UserStatus.PENDING : UserStatus.ACTIVE,
+        emailVerified: !this.managerConfig.requireEmailVerification,
         profile: {
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          displayName: userData.firstName ? `${userData.firstName} ${userData.lastName || ''}`.trim() : userData.username,
+          firstName: processedData.firstName,
+          lastName: processedData.lastName,
+          displayName: processedData.firstName ? 
+            `${processedData.firstName} ${processedData.lastName || ''}`.trim() : 
+            processedData.username,
         },
-        meta: {
-          emailVerified: !this.managerConfig.requireEmailVerification,
+        preferences: {
+          language: 'en',
+          timezone: 'UTC',
+          theme: 'auto',
+        },
+        stats: {
           loginCount: 0,
-          twoFactorEnabled: false,
+          postCount: 0,
+          commentCount: 0,
         },
-        passwordChangedAt: new Date(),
+        security: {
+          failedLoginAttempts: 0,
+          passwordChangedAt: new Date(),
+        },
+        metadata: {
+          source: 'registration',
+        },
       });
-
-      await user.save();
 
       // Send email verification if required
       if (this.managerConfig.requireEmailVerification) {
@@ -544,7 +667,24 @@ export class AuthManager {
 
       const authUser = await this.createAuthUser(user);
 
-      this.logger.info('User registered successfully', { userId: user._id, email: user.email });
+      // Apply after registration hooks
+      await this.hooks.doAction(CoreHooks.USER_REGISTERED, {
+        user: authUser,
+        originalData: finalUserData,
+      });
+
+      // Emit registration event
+      await this.events.emit(EventType.USER_REGISTERED, {
+        userId: user.id.toString(),
+        email: user.email,
+        username: user.username,
+        timestamp: new Date(),
+      });
+
+      this.logger.info('User registered successfully', { 
+        userId: user.id, 
+        email: user.email 
+      });
 
       return {
         success: true,
@@ -562,9 +702,12 @@ export class AuthManager {
    */
   public async requestPasswordReset(email: string): Promise<boolean> {
     try {
-      const user = await User.findOne({ email: email.toLowerCase() });
+      const sanitizedEmail = Sanitizer.sanitizeEmail(email);
+      const user = await this.userRepo.findByEmail(sanitizedEmail);
+      
       if (!user) {
         // Don't reveal if user exists
+        this.logger.warn('Password reset requested for non-existent email', { email: sanitizedEmail });
         return true;
       }
 
@@ -572,7 +715,7 @@ export class AuthManager {
       
       // Store reset request
       const resetRequest: PasswordResetRequest = {
-        userId: user._id,
+        userId: user.id,
         token,
         email: user.email,
         expiresAt: new Date(Date.now() + 3600000), // 1 hour
@@ -582,15 +725,29 @@ export class AuthManager {
 
       this.passwordResets.set(token, resetRequest);
 
-      // Emit event for email sending
-      await this.emitAuthEvent(AuthEventType.PASSWORD_RESET_REQUEST, {
-        userId: user._id.toString(),
-        email: user.email,
-        timestamp: new Date(),
-        metadata: { token },
+      // Cache reset request
+      await this.cache.set(`pwd_reset:${token}`, resetRequest, 3600); // 1 hour
+
+      // Apply password reset hooks
+      await this.hooks.doAction(CoreHooks.USER_BEFORE_UPDATE, {
+        user: await this.createAuthUser(user),
+        token,
+        action: 'password_reset_request',
       });
 
-      this.logger.info('Password reset requested', { userId: user._id, email: user.email });
+      // Emit event for email sending
+      await this.events.emit(EventType.USER_PASSWORD_RESET, {
+        userId: user.id.toString(),
+        email: user.email,
+        token,
+        timestamp: new Date(),
+        action: 'password_reset_requested',
+      });
+
+      this.logger.info('Password reset requested', { 
+        userId: user.id, 
+        email: user.email 
+      });
       return true;
 
     } catch (error) {
@@ -609,25 +766,45 @@ export class AuthManager {
         return false;
       }
 
-      const user = await User.findById(resetRequest.userId);
+      const user = await this.userRepo.findById(resetRequest.userId);
       if (!user) {
+        return false;
+      }
+
+      // Validate new password
+      const passwordValidation = await this.passwordHandler.validatePassword(newPassword, user);
+      if (!passwordValidation.valid) {
+        this.logger.warn('Password reset failed - weak password', { 
+          userId: user.id,
+          errors: passwordValidation.errors 
+        });
         return false;
       }
 
       await this.passwordHandler.updatePassword(user.id.toString(), newPassword);
       await this.passwordHandler.useResetToken(token);
 
+      // Clear cache
+      await this.cache.delete(`pwd_reset:${token}`);
+
       // Revoke all user sessions
       await this.logout(undefined, user.id.toString());
 
+      // Apply password reset hooks
+      await this.hooks.doAction(CoreHooks.USER_UPDATED, {
+        user: await this.createAuthUser(user),
+        action: 'password_reset_completed',
+      });
+
       // Emit event
-      await this.emitAuthEvent(AuthEventType.PASSWORD_RESET_SUCCESS, {
+      await this.events.emit(EventType.USER_PASSWORD_CHANGED, {
         userId: user.id.toString(),
         email: user.email,
         timestamp: new Date(),
+        action: 'password_reset_completed',
       });
 
-      this.logger.info('Password reset successful', { userId: user._id });
+      this.logger.info('Password reset successful', { userId: user.id });
       return true;
 
     } catch (error) {
@@ -637,11 +814,62 @@ export class AuthManager {
   }
 
   /**
+   * Verify email address
+   */
+  public async verifyEmail(token: string): Promise<boolean> {
+    try {
+      const verification = this.emailVerifications.get(token);
+      if (!verification || verification.used || verification.expiresAt < new Date()) {
+        return false;
+      }
+
+      const user = await this.userRepo.findById(verification.userId);
+      if (!user) {
+        return false;
+      }
+
+      // Update user
+      await this.userRepo.updateOne(user.id, {
+        emailVerified: true,
+        status: UserStatus.ACTIVE,
+      });
+
+      // Mark verification as used
+      verification.used = true;
+      this.emailVerifications.set(token, verification);
+
+      // Apply email verification hooks
+      await this.hooks.doAction(CoreHooks.USER_UPDATED, {
+        user: await this.createAuthUser(user),
+        action: 'email_verified',
+      });
+
+      // Emit event
+      await this.events.emit(EventType.USER_UPDATED, {
+        userId: user.id.toString(),
+        email: user.email,
+        timestamp: new Date(),
+        action: 'email_verified',
+      });
+
+      this.logger.info('Email verified successfully', { 
+        userId: user.id, 
+        email: user.email 
+      });
+      return true;
+
+    } catch (error) {
+      this.logger.error('Email verification error:', error);
+      return false;
+    }
+  }
+
+  /**
    * Check user permission
    */
   public async hasPermission(userId: string, permission: string, context?: any): Promise<boolean> {
     try {
-      const user = await User.findById(userId);
+      const user = await this.userRepo.findById(userId);
       if (!user) {
         return false;
       }
@@ -656,6 +884,45 @@ export class AuthManager {
   }
 
   /**
+   * Get authentication statistics
+   */
+  public async getStats(): Promise<AuthStats> {
+    try {
+      const totalUsers = await this.userRepo.count({});
+      const activeUsers = await this.userRepo.count({ status: UserStatus.ACTIVE });
+      const lockedAccounts = await this.userRepo.count({ status: UserStatus.SUSPENDED });
+
+      const today = DateUtils.startOfDay(new Date());
+      const newUsersToday = await this.userRepo.count({
+        createdAt: { $gte: today },
+      });
+
+      // Count today's login attempts
+      const todayAttempts = today
+        ? this.authAttempts.filter(attempt => attempt.timestamp >= today)
+        : [];
+      const loginAttemptsToday = todayAttempts.length;
+      const successfulLoginsToday = todayAttempts.filter(a => a.success).length;
+      const failedLoginsToday = todayAttempts.filter(a => !a.success).length;
+
+      return {
+        totalUsers,
+        activeUsers,
+        newUsersToday,
+        loginAttemptsToday,
+        successfulLoginsToday,
+        failedLoginsToday,
+        lockedAccounts,
+        activeSessions: this.activeSessions.size,
+      };
+
+    } catch (error) {
+      this.logger.error('Get stats error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get authentication metrics
    */
   public async getMetrics(): Promise<AuthMetrics> {
@@ -664,27 +931,43 @@ export class AuthManager {
         throw new Error('Metrics are disabled');
       }
 
-      // This would typically be calculated from stored events/logs
-      // For now, return basic metrics
-      const totalUsers = await User.countDocuments();
-      const activeUsers = await User.countDocuments({ status: UserStatus.ACTIVE });
-      const lockedAccounts = await User.countDocuments({ status: UserStatus.SUSPENDED });
+      const stats = await this.getStats();
+      
+      // Calculate additional metrics from auth attempts
+      const totalLogins = this.authAttempts.length;
+      const successfulLogins = this.authAttempts.filter(a => a.success).length;
+      const failedLogins = this.authAttempts.filter(a => !a.success).length;
+
+      // Group by hour for the last 24 hours
+      const now = new Date();
+      const loginsByHour: Record<string, number> = {};
+      for (let i = 0; i < 24; i++) {
+        const hour = new Date(now.getTime() - i * 60 * 60 * 1000).getHours();
+        loginsByHour[hour.toString()] = 0;
+      }
+
+      this.authAttempts
+        .filter(a => a.timestamp > new Date(now.getTime() - 24 * 60 * 60 * 1000))
+        .forEach(attempt => {
+          const hour = attempt.timestamp.getHours().toString();
+          loginsByHour[hour] = (loginsByHour[hour] || 0) + 1;
+        });
 
       return {
-        totalLogins: 0, // Would be tracked in events
-        successfulLogins: 0,
-        failedLogins: 0,
-        activeUsers,
-        activeSessions: this.activeSessions.size,
-        lockedAccounts,
-        twoFactorUsers: 0, // Would query users with 2FA enabled
-        oauthUsers: 0,
-        averageSessionDuration: 0,
-        loginsByHour: {},
-        loginsByDay: {},
-        topUserAgents: {},
-        topCountries: {},
-        securityIncidents: 0,
+        totalLogins,
+        successfulLogins,
+        failedLogins,
+        activeUsers: stats.activeUsers,
+        activeSessions: stats.activeSessions,
+        lockedAccounts: stats.lockedAccounts,
+        twoFactorUsers: 0, // TODO: Count users with 2FA enabled
+        oauthUsers: 0, // TODO: Count OAuth users
+        averageSessionDuration: 0, // TODO: Calculate from session data
+        loginsByHour,
+        loginsByDay: {}, // TODO: Implement daily stats
+        topUserAgents: {}, // TODO: Analyze user agents
+        topCountries: {}, // TODO: Analyze IP geolocation
+        securityIncidents: 0, // TODO: Count security incidents
         lastUpdate: new Date(),
       };
 
@@ -704,10 +987,10 @@ export class AuthManager {
       // Check database connectivity
       let databaseHealthy = true;
       try {
-        await User.findOne().limit(1);
+        await this.userRepo.findOne({});
       } catch (error) {
         databaseHealthy = false;
-        errors.push(`Database: ${error.message}`);
+        errors.push(`Database: ${error}`);
       }
 
       // Check cache connectivity
@@ -723,7 +1006,12 @@ export class AuthManager {
       // Test token generation
       let tokensHealthy = true;
       try {
-        const testUser = { _id: 'test', email: 'test@test.com', username: 'test', role: UserRole.SUBSCRIBER } as IUser;
+        const testUser = {
+          _id: new Types.ObjectId(),
+          email: 'test@test.com',
+          username: 'test',
+          role: UserRole.SUBSCRIBER,
+        } as IUser;
         await this.jwtHandler.generateTokens(testUser);
       } catch (error) {
         tokensHealthy = false;
@@ -742,10 +1030,10 @@ export class AuthManager {
           twoFactor: this.managerConfig.enableTwoFactorAuth,
         },
         metrics: {
-          activeUsers: await User.countDocuments({ status: UserStatus.ACTIVE }),
+          activeUsers: await this.userRepo.count({ status: UserStatus.ACTIVE }),
           activeSessions: this.activeSessions.size,
-          errorRate: 0, // Would be calculated from logs
-          averageResponseTime: 0, // Would be calculated from metrics
+          errorRate: 0, // TODO: Calculate from logs
+          averageResponseTime: 0, // TODO: Calculate from metrics
         },
         lastCheck: new Date(),
         errors,
@@ -799,8 +1087,16 @@ export class AuthManager {
       this.oauthStates.clear();
       this.passwordResets.clear();
       this.emailVerifications.clear();
+      this.loginAttempts.clear();
+      this.authAttempts.length = 0;
 
       this.initialized = false;
+
+      await this.events.emit(EventType.SYSTEM_SHUTDOWN, {
+        timestamp: new Date(),
+        component: 'AuthManager',
+      });
+
       this.logger.info('Authentication manager shutdown complete');
 
     } catch (error) {
@@ -814,47 +1110,67 @@ export class AuthManager {
   // ===================================================================
 
   private validateCredentials(credentials: AuthCredentials): { valid: boolean; error?: string } {
-    if (!credentials.email && !credentials.username) {
-      return { valid: false, error: 'Email or username is required' };
-    }
+    try {
+      const validation = Validator.validate(Validator.authCredentialsSchema, credentials);
+      if (!validation.success) {
+        return { valid: false, error: validation.errors.message };
+      }
 
-    if (!credentials.password) {
-      return { valid: false, error: 'Password is required' };
-    }
+      if (!credentials.email && !credentials.username) {
+        return { valid: false, error: 'Email or username is required' };
+      }
 
-    if (credentials.email && !Validator.isEmail(credentials.email)) {
-      return { valid: false, error: 'Invalid email format' };
-    }
+      if (!credentials.password) {
+        return { valid: false, error: 'Password is required' };
+      }
 
-    return { valid: true };
+      if (credentials.email && !Validator.isEmail(credentials.email)) {
+        return { valid: false, error: 'Invalid email format' };
+      }
+
+      return { valid: true };
+    } catch (error) {
+      return { valid: false, error: 'Validation failed' };
+    }
   }
 
-  private validateRegistrationData(userData: any): { valid: boolean; error?: string } {
-    if (!userData.email || !Validator.isEmail(userData.email)) {
-      return { valid: false, error: 'Valid email is required' };
-    }
+  private validateRegistrationData(userData: RegistrationData): { valid: boolean; error?: string } {
+    try {
+      const validation = Validator.validate(Validator.userCreateSchema, userData);
+      if (!validation.success) {
+        return { valid: false, error: validation.errors.message };
+      }
 
-    if (!userData.username || userData.username.length < 3) {
-      return { valid: false, error: 'Username must be at least 3 characters long' };
-    }
+      if (!userData.email || !Sanitizer.isEmail(userData.email)) {
+        return { valid: false, error: 'Valid email is required' };
+      }
 
-    if (!userData.password) {
-      return { valid: false, error: 'Password is required' };
-    }
+      if (!userData.username || userData.username.length < 3) {
+        return { valid: false, error: 'Username must be at least 3 characters long' };
+      }
 
-    return { valid: true };
+      if (!userData.password) {
+        return { valid: false, error: 'Password is required' };
+      }
+
+      return { valid: true };
+    } catch (error) {
+      return { valid: false, error: 'Validation failed' };
+    }
   }
 
   private async findUserByCredentials(credentials: AuthCredentials): Promise<IUser | null> {
-    const query: any = {};
-
-    if (credentials.email) {
-      query.email = credentials.email.toLowerCase();
-    } else if (credentials.username) {
-      query.username = credentials.username;
+    try {
+      if (credentials.email) {
+        return await this.userRepo.findByEmail(credentials.email);
+      } else if (credentials.username) {
+        return await this.userRepo.findByUsername(credentials.username);
+      }
+      return null;
+    } catch (error) {
+      this.logger.error('Error finding user by credentials:', error);
+      return null;
     }
-
-    return User.findOne(query);
   }
 
   private checkAccountStatus(user: IUser): { valid: boolean; errorCode?: AuthErrorCode; message?: string } {
@@ -879,26 +1195,26 @@ export class AuthManager {
       id: user.id.toString(),
       email: user.email,
       username: user.username,
-      role: user.role,
+      rolel: user.role,
       status: user.status,
       permissions,
       profile: {
-        firstName: user.profile?.firstName,
-        lastName: user.profile?.lastName,
-        displayName: user.profile?.displayName || user.username,
-        avatar: user.profile?.avatar,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        displayName: user.displayName || user.username,
+        avatar: user.avatar,
       },
       preferences: {
         language: user.preferences?.language || 'en',
         timezone: user.preferences?.timezone || 'UTC',
-        theme: user.preferences?.theme || 'light',
+        theme: user.preferences?.theme || 'auto',
       },
       meta: {
-        lastLogin: user.meta?.lastLogin,
-        loginCount: user.meta?.loginCount || 0,
-        emailVerified: user.meta?.emailVerified || false,
-        twoFactorEnabled: user.meta?.twoFactorEnabled || false,
-        passwordChangedAt: user.passwordChangedAt,
+        lastLogin: user.lastLogin,
+        loginCount: user.stats?.loginCount || 0,
+        emailVerified: user.emailVerified || false,
+        twoFactorEnabled: user.twoFactorEnabled || false,
+        passwordChangedAt: user.security?.passwordChangedAt,
       },
     };
   }
@@ -923,16 +1239,21 @@ export class AuthManager {
       isActive: true,
       data: {
         rememberMe: credentials.rememberMe,
+        trustDevice: credentials.trustDevice,
       },
     };
 
     this.activeSessions.set(sessionId, session);
 
+    // Cache session
+    await this.cache.set(`session:${sessionId}`, session, this.managerConfig.session.timeout * 60);
+
     // Emit session creation event
-    await this.emitAuthEvent(AuthEventType.SESSION_CREATED, {
+    await this.events.emit(EventType.USER_LOGIN, {
       userId: user.id.toString(),
       sessionId,
       timestamp: new Date(),
+      action: 'session_created',
     });
 
     return session;
@@ -943,42 +1264,116 @@ export class AuthManager {
     if (session && this.managerConfig.session.extendOnActivity) {
       session.lastActivity = new Date();
       session.expiresAt = new Date(Date.now() + this.managerConfig.session.timeout * 60 * 1000);
+      
+      // Update cache
+      await this.cache.set(`session:${sessionId}`, session, this.managerConfig.session.timeout * 60);
     }
   }
 
   private async updateUserLoginStats(user: IUser, credentials: AuthCredentials): Promise<void> {
-    const updateData: any = {
-      'meta.lastLogin': new Date(),
-      'meta.loginCount': (user.meta?.loginCount || 0) + 1,
-      'meta.lastLoginIP': credentials.ipAddress,
+    const updateData: Partial<IUser> = {
+      lastLogin: new Date(),
+      'stats.loginCount': (user.stats?.loginCount || 0) + 1,
     };
 
-    await User.findByIdAndUpdate(user._id, updateData);
+    await this.userRepo.update(user.id, updateData);
   }
 
-  private async lockAccount(user: IUser): Promise<void> {
-    await User.findByIdAndUpdate(user._id, {
-      status: UserStatus.SUSPENDED,
-      'meta.lockedAt': new Date(),
-      'meta.lockReason': 'Multiple failed login attempts',
-    });
+  private async isAccountLocked(user: IUser): Promise<boolean> {
+    const lockoutEnd = user.security?.lockedUntil;
+    if (!lockoutEnd) return false;
+    
+    return lockoutEnd > new Date();
+  }
 
-    await this.emitAuthEvent(AuthEventType.ACCOUNT_LOCKED, {
-      userId: user.id.toString(),
-      email: user.email,
-      timestamp: new Date(),
+  private async incrementFailedAttempts(user: IUser): Promise<void> {
+    const attempts = (user.security?.failedLoginAttempts || 0) + 1;
+    const updateData: Partial<IUser> = {
+      'security.failedLoginAttempts': attempts,
+    };
+
+    // Lock account if max attempts reached
+    if (attempts >= this.managerConfig.maxFailedAttempts) {
+      updateData['security.lockedUntil'] = new Date(
+        Date.now() + this.managerConfig.lockoutDuration * 60 * 1000
+      );
+      updateData.status = UserStatus.SUSPENDED;
+    }
+
+    await this.userRepo.update(user.id, updateData);
+  }
+
+  private async clearFailedAttempts(user: IUser): Promise<void> {
+    await this.userRepo.update(user.id, {
+      'security.failedLoginAttempts': 0,
+      'security.lockedUntil': undefined,
     });
+  }
+
+  private async checkRateLimit(credentials: AuthCredentials): Promise<{ allowed: boolean; remaining?: number }> {
+    const identifier = credentials.email || credentials.ipAddress || 'anonymous';
+    const cacheKey = `rate_limit:${identifier}`;
+    
+    try {
+      const attempts = await this.cache.get<number>(cacheKey) || 0;
+      const maxAttempts = 10; // Allow 10 attempts per hour
+      
+      if (attempts >= maxAttempts) {
+        return { allowed: false, remaining: 0 };
+      }
+
+      await this.cache.set(cacheKey, attempts + 1, 3600); // 1 hour
+      return { allowed: true, remaining: maxAttempts - attempts - 1 };
+    } catch (error) {
+      // If cache fails, allow the request
+      return { allowed: true };
+    }
   }
 
   private async recordFailedAttempt(credentials: AuthCredentials, user?: IUser): Promise<void> {
-    await this.emitAuthEvent(AuthEventType.LOGIN_FAILED, {
-      userId: user?.id?.toString(),
-      email: credentials.email ?? '',
-      username: credentials.username ?? '',
-      ipAddress: credentials.ipAddress ?? '',
-      userAgent: credentials.userAgent ?? '',
+    const attempt: AuthAttempt = {
+      userId: user?._id,
+      email: credentials.email,
+      ipAddress: credentials.ipAddress || '',
+      userAgent: credentials.userAgent,
+      success: false,
+      failureReason: AuthErrorCode.INVALID_CREDENTIALS,
+      timestamp: new Date(),
+    };
+
+    this.authAttempts.push(attempt);
+
+    // Keep only last 1000 attempts in memory
+    if (this.authAttempts.length > 1000) {
+      this.authAttempts.splice(0, this.authAttempts.length - 1000);
+    }
+
+    await this.events.emit(EventType.USER_LOGIN_FAILED, {
+      userId: user?._id?.toString(),
+      email: credentials.email || '',
+      username: credentials.username || '',
+      ipAddress: credentials.ipAddress || '',
+      userAgent: credentials.userAgent || '',
       timestamp: new Date(),
     });
+  }
+
+  private async recordSuccessfulAttempt(credentials: AuthCredentials, user: IUser): Promise<void> {
+    const attempt: AuthAttempt = {
+      userId: user.id,
+      email: credentials.email,
+      ipAddress: credentials.ipAddress || '',
+      userAgent: credentials.userAgent,
+      success: true,
+      timestamp: new Date(),
+    };
+
+    this.authAttempts.push(attempt);
+
+    // Keep only last 1000 attempts in memory
+    if (this.authAttempts.length > 1000) {
+      this.authAttempts.splice(0, this.authAttempts.length - 1000);
+    }
   }
 
   private createAuthError(code: AuthErrorCode, message: string, details?: any): AuthResult {
@@ -994,10 +1389,9 @@ export class AuthManager {
   }
 
   private async generateTwoFactorToken(user: IUser): Promise<string> {
-    // Generate temporary token for 2FA verification
     const token = crypto.randomBytes(32).toString('hex');
     
-    // Store temporarily (would be better in cache/database)
+    // Store temporarily in cache
     await this.cache.set(`2fa:${token}`, user.id.toString(), 300); // 5 minutes
     
     return token;
@@ -1005,8 +1399,8 @@ export class AuthManager {
 
   private async verifyTwoFactorCode(user: IUser, code: string): Promise<boolean> {
     // This would integrate with a TOTP library like speakeasy
-    // For now, return true if code is provided
-    return !!code && code.length === 6;
+    // For now, return true if code is provided and has correct format
+    return !!code && code.length === 6 && /^\d{6}$/.test(code);
   }
 
   private async sendEmailVerification(user: IUser): Promise<void> {
@@ -1023,11 +1417,15 @@ export class AuthManager {
 
     this.emailVerifications.set(token, verification);
 
-    await this.emitAuthEvent(AuthEventType.EMAIL_VERIFICATION_SENT, {
+    // Cache verification
+    await this.cache.set(`email_verify:${token}`, verification, 24 * 60 * 60); // 24 hours
+
+    await this.events.emit(EventType.EMAIL_SENT, {
       userId: user.id.toString(),
       email: user.email,
+      token,
       timestamp: new Date(),
-      metadata: { token },
+      type: 'email_verification',
     });
   }
 
@@ -1037,6 +1435,12 @@ export class AuthManager {
     }, this.managerConfig.sessionCleanupInterval * 60 * 1000);
   }
 
+  private startDataCleanup(): void {
+    setInterval(() => {
+      this.cleanupExpiredData();
+    }, this.managerConfig.cleanupInterval * 60 * 1000);
+  }
+
   private cleanupExpiredSessions(): void {
     const now = new Date();
     let cleaned = 0;
@@ -1044,6 +1448,7 @@ export class AuthManager {
     for (const [sessionId, session] of this.activeSessions.entries()) {
       if (session.expiresAt < now) {
         this.activeSessions.delete(sessionId);
+        this.cache.delete(`session:${sessionId}`);
         cleaned++;
       }
     }
@@ -1053,20 +1458,60 @@ export class AuthManager {
     }
   }
 
-  private async emitAuthEvent(type: AuthEventType, data: AuthEventData): Promise<void> {
-    try {
-      await this.events.emit(type, data);
-    } catch (error) {
-      this.logger.error('Failed to emit auth event:', error);
+  private cleanupExpiredData(): void {
+    const now = new Date();
+    let cleaned = 0;
+
+    // Cleanup password resets
+    for (const [token, request] of this.passwordResets.entries()) {
+      if (request.expiresAt < now || request.used) {
+        this.passwordResets.delete(token);
+        this.cache.delete(`pwd_reset:${token}`);
+        cleaned++;
+      }
+    }
+
+    // Cleanup email verifications
+    for (const [token, verification] of this.emailVerifications.entries()) {
+      if (verification.expiresAt < now || verification.used) {
+        this.emailVerifications.delete(token);
+        this.cache.delete(`email_verify:${token}`);
+        cleaned++;
+      }
+    }
+
+    // Cleanup OAuth states
+    for (const [state, oauthState] of this.oauthStates.entries()) {
+      if (oauthState.expiresAt < now) {
+        this.oauthStates.delete(state);
+        cleaned++;
+      }
+    }
+
+    // Cleanup old auth attempts (keep only last 24 hours)
+    const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const initialLength = this.authAttempts.length;
+    this.authAttempts = this.authAttempts.filter(attempt => attempt.timestamp > cutoff);
+    cleaned += initialLength - this.authAttempts.length;
+
+    if (cleaned > 0) {
+      this.logger.debug('Cleaned up expired data', { count: cleaned });
     }
   }
 
   private async registerDefaultMiddleware(): Promise<void> {
     // Add any default middleware here
+    this.logger.debug('Registered default middleware');
   }
 
   private async registerEventHandlers(): Promise<void> {
     // Register event handlers for auth events
+    this.logger.debug('Registered event handlers');
+  }
+
+  private async registerHooks(): Promise<void> {
+    // Register hooks for plugin system integration
+    this.logger.debug('Registered hooks');
   }
 
   // Middleware application methods

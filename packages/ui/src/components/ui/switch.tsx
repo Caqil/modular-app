@@ -1,1 +1,0 @@
-export default function switch() { return <div>switch</div> }
