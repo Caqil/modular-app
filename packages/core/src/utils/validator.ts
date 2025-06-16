@@ -144,7 +144,13 @@ export function validateSlug(slug: string): boolean {
 export function validatePassword(password: string): boolean {
   return passwordSchema.safeParse(password).success;
 }
-
+export function validateObject(data: any, schema: z.ZodSchema): string[] {
+  const result = validate(schema, data);
+  if (result.success) {
+    return [];
+  }
+  return result.errors.errors.map(err => `${err.path.join('.')}: ${err.message}`);
+}
 // Generic validation function
 export function validate<T>(schema: z.ZodSchema<T>, data: unknown): { success: true; data: T } | { success: false; errors: z.ZodError } {
   const result = schema.safeParse(data);
@@ -225,6 +231,7 @@ export const Validator = {
   validateUrl,
   validateSlug,
   validatePassword,
+  validateObject,
   validate,
   customValidators,
 };

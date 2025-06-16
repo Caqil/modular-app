@@ -4,6 +4,7 @@
 import Joi from 'joi';
 import type { Types } from 'mongoose';
 import { UserRole, UserStatus } from '../types/user';
+import { PasswordRule } from 'src/auth/password-handler';
 
 // ===================================================================
 // CORE AUTH CONFIGURATION
@@ -36,17 +37,28 @@ export interface SessionConfig {
   maxConcurrent: number;
   extendOnActivity: boolean;
 }
-
 export interface PasswordConfig {
+  // Basic length requirements
   minLength: number;
+  maxLength?: number;
+  
+  // Character requirements
   requireUppercase: boolean;
   requireLowercase: boolean;
   requireNumbers: boolean;
   requireSpecialChars: boolean;
+  
+  // Security and history
   preventReuse: number;
   expiryDays?: number;
+  
+  // Failed login attempt controls
   maxAttempts: number;
   lockoutDuration: number; // in minutes
+  
+  // Password blacklist and custom validation
+  blacklist?: string[];
+  customRules?: PasswordRule[];
 }
 
 export interface TwoFactorConfig {

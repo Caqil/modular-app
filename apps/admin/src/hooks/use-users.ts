@@ -58,31 +58,30 @@ export const useUsers = () => {
       throw error;
     }
   }, []);
+const updateUser = useCallback(async (id: string, data: Parameters<typeof UsersAPI.updateUser>[1]) => {
+  try {
+    const user = await UsersAPI.updateUser(id, data);
+    setState(prev => ({ 
+      ...prev, 
+      users: prev.users.map(u => u._id.toString() === id ? user : u)
+    }));
+    return user;
+  } catch (error) {
+    throw error;
+  }
+}, []);
 
-  const updateUser = useCallback(async (id: string, data: Parameters<typeof UsersAPI.updateUser>[1]) => {
-    try {
-      const user = await UsersAPI.updateUser(id, data);
-      setState(prev => ({ 
-        ...prev, 
-        users: prev.users.map(u => u._id === id ? user : u)
-      }));
-      return user;
-    } catch (error) {
-      throw error;
-    }
-  }, []);
-
-  const deleteUser = useCallback(async (id: string) => {
-    try {
-      await UsersAPI.deleteUser(id);
-      setState(prev => ({ 
-        ...prev, 
-        users: prev.users.filter(u => u._id !== id)
-      }));
-    } catch (error) {
-      throw error;
-    }
-  }, []);
+const deleteUser = useCallback(async (id: string) => {
+  try {
+    await UsersAPI.deleteUser(id);
+    setState(prev => ({ 
+      ...prev, 
+      users: prev.users.filter(u => u._id.toString() !== id)
+    }));
+  } catch (error) {
+    throw error;
+  }
+}, []);
 
   const searchUsers = useCallback(async (query: string) => {
     try {

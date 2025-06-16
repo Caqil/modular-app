@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import type { PluginRecord } from '@modular-app/core';
 import { PluginsAPI } from '../types/plugins';
 import { AdminPlugins } from '../lib/plugins';
+import { PluginStatus } from '@modular-app/core/types/plugin';
 
 interface PluginState {
   plugins: PluginRecord[];
@@ -34,13 +35,13 @@ export const usePlugins = () => {
     }
   }, []);
 
-    const activatePlugin = useCallback(async (id: string) => {
+ const activatePlugin = useCallback(async (id: string) => {
     try {
       await PluginsAPI.activatePlugin(id);
       setState(prev => ({ 
         ...prev, 
         plugins: prev.plugins.map(p => 
-          p._id.toString() === id ? { ...p, status: 'active' as const } : p
+          p._id.toString() === id ? { ...p, status: PluginStatus.ACTIVE } : p
         )
       }));
     } catch (error) {
@@ -54,7 +55,7 @@ export const usePlugins = () => {
       setState(prev => ({ 
         ...prev, 
         plugins: prev.plugins.map(p => 
-          p._id.toString() === id ? { ...p, status: 'inactive' as const } : p
+          p._id.toString() === id ? { ...p, status: PluginStatus.INACTIVE } : p
         )
       }));
     } catch (error) {

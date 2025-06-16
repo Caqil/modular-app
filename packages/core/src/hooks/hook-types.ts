@@ -155,7 +155,6 @@ export enum CoreHooks {
   API_AFTER_REQUEST = 'api:after_request',
   API_ERROR = 'api:error',
 }
-
 export enum CoreFilters {
   // Content filters
   CONTENT_RENDER = 'content:render',
@@ -173,6 +172,7 @@ export enum CoreFilters {
   PLUGIN_CAPABILITIES = 'plugin:capabilities',
 
   // User filters
+  USER_REGISTRATION_DATA = 'user:registration_data',
   USER_DISPLAY_NAME = 'user:display_name',
   USER_AVATAR_URL = 'user:avatar_url',
   USER_ROLE_CAPABILITIES = 'user:role_capabilities',

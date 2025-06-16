@@ -78,7 +78,7 @@ export class JWTHandler {
         sub: user.id.toString(),
         email: user.email,
         username: user.username,
-        role: user.role,
+        role: user.role as UserRole,
         permissions: await this.getUserPermissions(user),
         sessionId: jwtSessionId,
         type: 'access',
@@ -469,6 +469,8 @@ export class JWTHandler {
       [UserRole.AUTHOR]: ['content.create', 'content.update:own', 'media.upload'],
       [UserRole.CONTRIBUTOR]: ['content.create', 'content.update:own'],
       [UserRole.SUBSCRIBER]: ['content.read'],
+      [UserRole.CUSTOMER]: ['content.read'],
+      [UserRole.MODERATOR]: ['content.moderate', 'user.read'],
     };
 
     return basePermissions[user.role] || ['content.read'];
@@ -502,7 +504,7 @@ export class JWTHandler {
         sub: user.id.toString(),
         email: user.email,
         username: user.username,
-        role: user.role,
+        role: user.role as UserRole,
         permissions: await this.getUserPermissions(user),
         sessionId,
         type: 'access',

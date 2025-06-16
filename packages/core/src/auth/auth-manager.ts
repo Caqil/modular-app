@@ -317,11 +317,6 @@ export class AuthManager {
         return this.createAuthError(AuthErrorCode.INVALID_CREDENTIALS, 'Invalid credentials');
       }
 
-      // Check password expiry
-      if (await this.passwordHandler.isPasswordExpired(user)) {
-        return this.createAuthError(AuthErrorCode.PASSWORD_EXPIRED, 'Password has expired');
-      }
-
       // Check two-factor authentication
       if (this.managerConfig.enableTwoFactorAuth && user.twoFactorEnabled && !finalCredentials.twoFactorCode) {
         const twoFactorToken = await this.generateTwoFactorToken(user);
@@ -424,7 +419,7 @@ export class AuthManager {
       if (!refreshResult.success) {
         return {
           success: false,
-          error: refreshResult.error !== undefined
+          error: refreshResult.error
             ? refreshResult.error
             : {
                 code: AuthErrorCode.TOKEN_INVALID,
@@ -557,8 +552,14 @@ export class AuthManager {
       if (!validation.valid) {
         return {
           success: false,
-          error: validation.error,
-        };
+          error: validation.error
+            ? validation.error
+            : {
+                code: AuthErrorCode.TOKEN_INVALID,
+                message: 'Token refresh failed',
+                timestamp: new Date()
+              },
+        }
       }
 
       const user = await this.userRepo.findById(validation.payload!.sub);
@@ -585,124 +586,144 @@ export class AuthManager {
     }
   }
 
-  /**
-   * Register new user
-   */
-  public async register(userData: RegistrationData): Promise<AuthResult> {
-    try {
-      if (!this.managerConfig.enableRegistration) {
-        return this.createAuthError(AuthErrorCode.PERMISSION_DENIED, 'Registration is disabled');
-      }
-
-      this.logger.debug('User registration attempt', { 
-        email: userData.email, 
-        username: userData.username 
-      });
-
-      // Apply before registration hooks
-      await this.hooks.doAction(CoreHooks.USER_BEFORE_REGISTER, {
-        userData: processedData,
-      });
-
-      const finalUserData = processedData;
-
-      // Validate input
-      const validation = this.validateRegistrationData(finalUserData);
-      if (!validation.valid) {
-        return this.createAuthError(AuthErrorCode.INVALID_CREDENTIALS, validation.error!);
-      }
-
-      // Check if user already exists
-      const existingUser = await this.userRepo.findOne({
-        $or: [
-          { email: finalUserData.email.toLowerCase() },
-          { username: finalUserData.username },
-        ],
-      });
-
-      if (existingUser) {
-        return this.createAuthError(AuthErrorCode.USER_NOT_FOUND, 'User already exists');
-      }
-
-      // Validate password
-      const passwordValidation = await this.passwordHandler.validatePassword(finalUserData.password);
-      if (!passwordValidation.valid) {
-        return this.createAuthError(AuthErrorCode.WEAK_PASSWORD, passwordValidation.errors.join(', '));
-      }
-
-      // Create user
-      const user = await this.userRepo.create({
-        email: finalUserData.email.toLowerCase(),
-        username: finalUserData.username,
-        password: finalUserData.password, // Will be hashed in repository
-        firstName: finalUserData.firstName,
-        lastName: finalUserData.lastName,
-        role: UserRole.SUBSCRIBER,
-        status: this.managerConfig.requireEmailVerification ? UserStatus.PENDING : UserStatus.ACTIVE,
-        emailVerified: !this.managerConfig.requireEmailVerification,
-        profile: {
-          firstName: processedData.firstName,
-          lastName: processedData.lastName,
-          displayName: processedData.firstName ? 
-            `${processedData.firstName} ${processedData.lastName || ''}`.trim() : 
-            processedData.username,
-        },
-        preferences: {
-          language: 'en',
-          timezone: 'UTC',
-          theme: 'auto',
-        },
-        stats: {
-          loginCount: 0,
-          postCount: 0,
-          commentCount: 0,
-        },
-        security: {
-          failedLoginAttempts: 0,
-          passwordChangedAt: new Date(),
-        },
-        metadata: {
-          source: 'registration',
-        },
-      });
-
-      // Send email verification if required
-      if (this.managerConfig.requireEmailVerification) {
-        await this.sendEmailVerification(user);
-      }
-
-      const authUser = await this.createAuthUser(user);
-
-      // Apply after registration hooks
-      await this.hooks.doAction(CoreHooks.USER_REGISTERED, {
-        user: authUser,
-        originalData: finalUserData,
-      });
-
-      // Emit registration event
-      await this.events.emit(EventType.USER_REGISTERED, {
-        userId: user.id.toString(),
-        email: user.email,
-        username: user.username,
-        timestamp: new Date(),
-      });
-
-      this.logger.info('User registered successfully', { 
-        userId: user.id, 
-        email: user.email 
-      });
-
-      return {
-        success: true,
-        user: authUser,
-      };
-
-    } catch (error) {
-      this.logger.error('Registration error:', error);
-      return this.createAuthError(AuthErrorCode.INVALID_CREDENTIALS, 'Registration failed');
+/**
+ * Register new user
+ */
+public async register(userData: RegistrationData): Promise<AuthResult> {
+  try {
+    if (!this.managerConfig.enableRegistration) {
+      return this.createAuthError(AuthErrorCode.PERMISSION_DENIED, 'Registration is disabled');
     }
-  }
 
+    this.logger.debug('User registration attempt', { 
+      email: userData.email, 
+      username: userData.username 
+    });
+
+    // Apply before registration action hook for notifications
+    await this.hooks.doAction(CoreHooks.USER_BEFORE_REGISTER, {
+      userData,
+    });
+
+    // Apply filter to process/modify registration data if plugins want to modify it
+    const processedData = await this.hooks.applyFilters(
+      CoreFilters.USER_REGISTRATION_DATA,
+      userData
+    );
+
+    // You could add your own data processing here if needed
+    // For example: sanitization, normalization, etc.
+    const finalUserData = {
+      ...processedData,
+      email: processedData.email.toLowerCase().trim(),
+      username: processedData.username.trim(),
+      firstName: processedData.firstName?.trim(),
+      lastName: processedData.lastName?.trim(),
+    };
+
+    // Validate input
+    const validation = this.validateRegistrationData(finalUserData);
+    if (!validation.valid) {
+      return this.createAuthError(AuthErrorCode.INVALID_CREDENTIALS, validation.error!);
+    }
+
+    // Check if user already exists
+    const existingUser = await this.userRepo.findOne({
+      $or: [
+        { email: finalUserData.email.toLowerCase() },
+        { username: finalUserData.username },
+      ],
+    });
+
+    if (existingUser) {
+      return this.createAuthError(AuthErrorCode.USER_NOT_FOUND, 'User already exists');
+    }
+
+    // Validate password
+    const passwordValidation = await this.passwordHandler.validatePassword(finalUserData.password);
+    if (!passwordValidation.valid) {
+      return this.createAuthError(AuthErrorCode.WEAK_PASSWORD, passwordValidation.errors.join(', '));
+    }
+
+    // Create user
+    const user = await this.userRepo.create({
+      email: finalUserData.email.toLowerCase(),
+      username: finalUserData.username,
+      password: finalUserData.password, // Will be hashed in repository
+      firstName: finalUserData.firstName,
+      lastName: finalUserData.lastName,
+      role: UserRole.SUBSCRIBER,
+      status: this.managerConfig.requireEmailVerification ? UserStatus.PENDING : UserStatus.ACTIVE,
+      emailVerified: !this.managerConfig.requireEmailVerification,
+      displayName: finalUserData.firstName
+        ? `${finalUserData.firstName} ${finalUserData.lastName || ''}`.trim()
+        : finalUserData.username,
+      preferences: {
+        language: 'en',
+        timezone: 'UTC',
+        theme: 'auto',
+        notifications: {
+          email: true,
+          push: false,
+          comments: true,
+          mentions: true,
+        },
+        privacy: {
+          profileVisibility: 'public',
+          showEmail: false,
+          allowMessages: true,
+        },
+      },
+      stats: {
+        loginCount: 0,
+        postCount: 0,
+        commentCount: 0,
+      },
+      security: {
+        failedLoginAttempts: 0,
+        passwordChangedAt: new Date(),
+      },
+      metadata: {
+        source: 'registration',
+      },
+    });
+
+    // Send email verification if required
+    if (this.managerConfig.requireEmailVerification) {
+      await this.sendEmailVerification(user);
+    }
+
+    const authUser = await this.createAuthUser(user);
+
+    // Apply after registration hooks
+    await this.hooks.doAction(CoreHooks.USER_REGISTERED, {
+      user: authUser,
+      originalData: finalUserData,
+    });
+
+    // Emit registration event
+    await this.events.emit(EventType.USER_REGISTERED, {
+      userId: user.id.toString(),
+      email: user.email,
+      username: user.username,
+      timestamp: new Date(),
+    });
+
+    this.logger.info('User registered successfully', { 
+      userId: user.id, 
+      email: user.email 
+    });
+
+    return {
+      success: true,
+      user: authUser,
+    };
+
+  } catch (error) {
+    this.logger.error('Registration error:', error);
+    return this.createAuthError(AuthErrorCode.INVALID_CREDENTIALS, 'Registration failed');
+  }
+}
   /**
    * Request password reset
    */
@@ -851,7 +872,7 @@ export class AuthManager {
       });
 
       // Emit event
-      await this.events.emit(EventType.USER_UPDATED, {
+      await this.events.emit(EventType.USER_PROFILE_UPDATED, {
         userId: user.id.toString(),
         email: user.email,
         timestamp: new Date(),
@@ -1006,7 +1027,7 @@ export class AuthManager {
         await this.cache.get('health:test');
       } catch (error) {
         cacheHealthy = false;
-        errors.push(`Cache: ${error.message}`);
+        errors.push(`Cache: ${error}`);
       }
 
       // Test token generation
@@ -1021,7 +1042,7 @@ export class AuthManager {
         await this.jwtHandler.generateTokens(testUser);
       } catch (error) {
         tokensHealthy = false;
-        errors.push(`Tokens: ${error.message}`);
+        errors.push(`Tokens: ${error}`);
       }
 
       const healthy = databaseHealthy && cacheHealthy && tokensHealthy;
@@ -1063,7 +1084,7 @@ export class AuthManager {
           averageResponseTime: -1,
         },
         lastCheck: new Date(),
-        errors: [error.message],
+        errors: [ error instanceof Error ? error.message : String(error)],
       };
     }
   }
@@ -1131,7 +1152,7 @@ export class AuthManager {
         return { valid: false, error: 'Password is required' };
       }
 
-      if (credentials.email && !Validator.isEmail(credentials.email)) {
+      if (credentials.email && !Validator.validateEmail(credentials.email)) {
         return { valid: false, error: 'Invalid email format' };
       }
 
@@ -1148,7 +1169,7 @@ export class AuthManager {
         return { valid: false, error: validation.errors.message };
       }
 
-      if (!userData.email || !Sanitizer.isEmail(userData.email)) {
+      if (!userData.email || !Validator.validateEmail(userData.email)) {
         return { valid: false, error: 'Valid email is required' };
       }
 
@@ -1196,35 +1217,37 @@ export class AuthManager {
   }
 
   private async createAuthUser(user: IUser): Promise<AuthUser> {
-    const permissions = await this.permissionManager.getUserPermissions(user.id.toString());
+  const permissions = await this.permissionManager.getUserPermissions(user.id.toString());
 
-    return {
-      id: user.id.toString(),
-      email: user.email,
-      username: user.username,
-      rolel: user.role,
-      status: user.status,
-      permissions,
-      profile: {
-        firstName: user.firstName,
-        lastName: user.lastName,
-        displayName: user.displayName || user.username,
-        avatar: user.avatar,
-      },
-      preferences: {
-        language: user.preferences?.language || 'en',
-        timezone: user.preferences?.timezone || 'UTC',
-        theme: user.preferences?.theme || 'auto',
-      },
-      meta: {
-        lastLogin: user.lastLogin,
-        loginCount: user.stats?.loginCount || 0,
-        emailVerified: user.emailVerified || false,
-        twoFactorEnabled: user.twoFactorEnabled || false,
-        passwordChangedAt: user.security?.passwordChangedAt,
-      },
-    };
-  }
+  return {
+    id: user.id.toString(),
+    email: user.email,
+    username: user.username,
+    role: user.role as UserRole, // Cast to enum type
+    status: user.status as UserStatus, // Cast to enum type
+    permissions,
+    profile: {
+      // Handle undefined values properly
+      ...(user.firstName && { firstName: user.firstName }),
+      ...(user.lastName && { lastName: user.lastName }),
+      displayName: user.displayName || user.username,
+      ...(user.avatar && { avatar: user.avatar }),
+    },
+    preferences: {
+      language: user.preferences?.language || 'en',
+      timezone: user.preferences?.timezone || 'UTC',
+      theme: user.preferences?.theme || 'auto',
+    },
+    meta: {
+      // Handle undefined values properly for optional fields
+      ...(user.lastLogin && { lastLogin: user.lastLogin }),
+      loginCount: user.stats?.loginCount || 0,
+      emailVerified: user.emailVerified || false,
+      twoFactorEnabled: user.twoFactorEnabled || false,
+      ...(user.security?.passwordChangedAt && { passwordChangedAt: user.security.passwordChangedAt }),
+    },
+  };
+}
 
   private async createSession(
     user: IUser,
@@ -1238,15 +1261,14 @@ export class AuthManager {
       userId: user.id.toString(),
       token: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      ipAddress: credentials.ipAddress,
-      userAgent: credentials.userAgent,
+      ipAddress: credentials.ipAddress ?? '',
+      userAgent: credentials.userAgent ?? '',
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + this.managerConfig.session.timeout * 60 * 1000),
       lastActivity: new Date(),
       isActive: true,
       data: {
         rememberMe: credentials.rememberMe,
-        trustDevice: credentials.trustDevice,
       },
     };
 
@@ -1277,14 +1299,14 @@ export class AuthManager {
     }
   }
 
-  private async updateUserLoginStats(user: IUser, credentials: AuthCredentials): Promise<void> {
-    const updateData: Partial<IUser> = {
-      lastLogin: new Date(),
-      'stats.loginCount': (user.stats?.loginCount || 0) + 1,
-    };
-
-    await this.userRepo.update(user.id, updateData);
-  }
+ private async updateUserLoginStats(user: IUser, credentials: AuthCredentials): Promise<void> {
+  await this.userRepo.updateById(user.id, {
+    lastLogin: new Date(),
+    $inc: { 'stats.loginCount': 1 },
+    'stats.lastLoginAt': new Date(),
+    'stats.lastActivityAt': new Date(),
+  });
+}
 
   private async isAccountLocked(user: IUser): Promise<boolean> {
     const lockoutEnd = user.security?.lockedUntil;
@@ -1294,24 +1316,24 @@ export class AuthManager {
   }
 
   private async incrementFailedAttempts(user: IUser): Promise<void> {
-    const attempts = (user.security?.failedLoginAttempts || 0) + 1;
-    const updateData: Partial<IUser> = {
-      'security.failedLoginAttempts': attempts,
-    };
+  const updateData: Record<string, any> = {
+    $inc: { 'security.failedLoginAttempts': 1 },
+  };
 
-    // Lock account if max attempts reached
-    if (attempts >= this.managerConfig.maxFailedAttempts) {
-      updateData['security.lockedUntil'] = new Date(
-        Date.now() + this.managerConfig.lockoutDuration * 60 * 1000
-      );
-      updateData.status = UserStatus.SUSPENDED;
-    }
-
-    await this.userRepo.update(user.id, updateData);
+  // Lock account if max attempts reached
+  const currentAttempts = (user.security?.failedLoginAttempts || 0) + 1;
+  if (currentAttempts >= this.managerConfig.maxFailedAttempts) {
+    updateData['security.lockedUntil'] = new Date(
+      Date.now() + this.managerConfig.lockoutDuration * 60 * 1000
+    );
+    updateData.status = UserStatus.SUSPENDED;
   }
 
+  await this.userRepo.updateById(user.id, updateData);
+}
+
   private async clearFailedAttempts(user: IUser): Promise<void> {
-    await this.userRepo.update(user.id, {
+    await this.userRepo.updateOne(user.id, {
       'security.failedLoginAttempts': 0,
       'security.lockedUntil': undefined,
     });
@@ -1339,10 +1361,10 @@ export class AuthManager {
 
   private async recordFailedAttempt(credentials: AuthCredentials, user?: IUser): Promise<void> {
     const attempt: AuthAttempt = {
-      userId: user?._id,
-      email: credentials.email,
+      userId: user?.id as Types.ObjectId,
+      email: credentials.email || '',
       ipAddress: credentials.ipAddress || '',
-      userAgent: credentials.userAgent,
+      userAgent: credentials.userAgent || '',
       success: false,
       failureReason: AuthErrorCode.INVALID_CREDENTIALS,
       timestamp: new Date(),
@@ -1368,9 +1390,9 @@ export class AuthManager {
   private async recordSuccessfulAttempt(credentials: AuthCredentials, user: IUser): Promise<void> {
     const attempt: AuthAttempt = {
       userId: user.id,
-      email: credentials.email,
+      email: credentials.email || '',
       ipAddress: credentials.ipAddress || '',
-      userAgent: credentials.userAgent,
+      userAgent: credentials.userAgent || '',
       success: true,
       timestamp: new Date(),
     };

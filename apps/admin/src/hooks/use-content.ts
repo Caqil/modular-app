@@ -72,7 +72,7 @@ export const useContent = () => {
       const post = await ContentAPI.updatePost(id, data);
       setState(prev => ({ 
         ...prev, 
-        posts: prev.posts.map(p => p._id === id ? post : p)
+        posts: prev.posts.map(p => p._id.toString() === id ? post : p)
       }));
       return post;
     } catch (error) {
@@ -85,7 +85,7 @@ export const useContent = () => {
       await ContentAPI.deletePost(id);
       setState(prev => ({ 
         ...prev, 
-        posts: prev.posts.filter(p => p._id !== id)
+        posts: prev.posts.filter(p => p._id.toString() !== id)
       }));
     } catch (error) {
       throw error;
@@ -105,25 +105,26 @@ export const useContent = () => {
     }
   }, []);
 
-  const updatePage = useCallback(async (id: string, data: Parameters<typeof ContentAPI.updatePage>[1]) => {
-    try {
-      const page = await ContentAPI.updatePage(id, data);
-      setState(prev => ({ 
-        ...prev, 
-        pages: prev.pages.map(p => p._id === id ? page : p)
-      }));
-      return page;
-    } catch (error) {
-      throw error;
-    }
-  }, []);
+const updatePage = useCallback(async (id: string, data: Parameters<typeof ContentAPI.updatePage>[1]) => {
+  try {
+    const page = await ContentAPI.updatePage(id, data);
+    setState(prev => ({ 
+      ...prev, 
+      pages: prev.pages.map(p => p._id.toString() === id ? page : p)
+      //                          ^^^^^^^^^^^^ Add .toString() here
+    }));
+    return page;
+  } catch (error) {
+    throw error;
+  }
+}, []);
 
   const deletePage = useCallback(async (id: string) => {
     try {
       await ContentAPI.deletePage(id);
       setState(prev => ({ 
         ...prev, 
-        pages: prev.pages.filter(p => p._id !== id)
+        pages: prev.pages.filter(p => p._id.toString() !== id)
       }));
     } catch (error) {
       throw error;

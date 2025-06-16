@@ -14,6 +14,7 @@ import {
   AuthErrorCode,
   AuthEventType,
 } from './auth-types';
+import { PasswordConfig } from 'src/types/auth-types';
 
 export interface PasswordPolicy {
   minLength: number;
@@ -65,8 +66,8 @@ export interface PasswordAttempt {
   userId: string;
   success: boolean;
   timestamp: Date;
-  ipAddress?: string;
-  userAgent?: string;
+  ipAddress?: string | undefined;
+  userAgent?: string | undefined;
 }
 
 /**
@@ -77,7 +78,7 @@ export class PasswordHandler {
   private logger = new Logger('PasswordHandler');
   private events = EventManager.getInstance();
   private cache = CacheManager.getInstance();
-  private config: AuthConfig['password'];
+  private config: PasswordConfig; 
   private bcryptRounds: number;
   private failedAttempts = new Map<string, PasswordAttempt[]>();
   private resetTokens = new Map<string, PasswordResetToken>();
@@ -214,9 +215,9 @@ export class PasswordHandler {
         const userInfo = [
           user.email?.split('@')[0],
           user.username,
-          user.profile?.firstName,
-          user.profile?.lastName,
-          user.profile?.displayName,
+          user.firstName,
+          user.lastName,
+          user.displayName,
         ].filter(Boolean);
 
         const containsUserInfo = userInfo.some(info => 
@@ -262,38 +263,6 @@ export class PasswordHandler {
   }
 
   /**
-   * Check if password was previously used
-   */
-  public async checkPasswordReuse(userId: string, password: string): Promise<boolean> {
-    try {
-      if (this.config.preventReuse <= 0) {
-        return false; // Reuse checking disabled
-      }
-
-      const user = await User.findById(userId);
-      if (!user || !user.passwordHistory || user.passwordHistory.length === 0) {
-        return false;
-      }
-
-      // Check against recent passwords
-      const recentPasswords = user.passwordHistory.slice(-this.config.preventReuse);
-      
-      for (const historicalHash of recentPasswords) {
-        const isReused = await this.verifyPassword(password, historicalHash);
-        if (isReused) {
-          return true;
-        }
-      }
-
-      return false;
-
-    } catch (error) {
-      this.logger.error('Password reuse check error:', error);
-      return false;
-    }
-  }
-
-  /**
    * Update user password
    */
   public async updatePassword(userId: string, newPassword: string, oldPassword?: string): Promise<void> {
@@ -317,12 +286,6 @@ export class PasswordHandler {
         throw new Error(`Password validation failed: ${validation.errors.join(', ')}`);
       }
 
-      // Check password reuse
-      const isReused = await this.checkPasswordReuse(userId, newPassword);
-      if (isReused) {
-        throw new Error(`Password cannot be one of your last ${this.config.preventReuse} passwords`);
-      }
-
       // Hash new password
       const hashedResult = await this.hashPassword(newPassword);
 
@@ -331,19 +294,6 @@ export class PasswordHandler {
         password: hashedResult.hash,
         passwordChangedAt: new Date(),
       };
-
-      // Update password history
-      if (this.config.preventReuse > 0) {
-        const passwordHistory = user.passwordHistory || [];
-        passwordHistory.push(user.password); // Add current password to history
-        
-        // Keep only the specified number of previous passwords
-        if (passwordHistory.length > this.config.preventReuse) {
-          passwordHistory.splice(0, passwordHistory.length - this.config.preventReuse);
-        }
-        
-        updateData.passwordHistory = passwordHistory;
-      }
 
       await User.findByIdAndUpdate(userId, updateData);
 
@@ -362,35 +312,6 @@ export class PasswordHandler {
       this.logger.error('Password update error:', error);
       throw error;
     }
-  }
-
-  /**
-   * Check if password is expired
-   */
-  public isPasswordExpired(user: IUser): boolean {
-    if (!this.config.expiryDays || !user.passwordChangedAt) {
-      return false;
-    }
-
-    const expiryDate = new Date(user.passwordChangedAt);
-    expiryDate.setDate(expiryDate.getDate() + this.config.expiryDays);
-    
-    return new Date() > expiryDate;
-  }
-
-  /**
-   * Get days until password expiry
-   */
-  public getDaysUntilExpiry(user: IUser): number | null {
-    if (!this.config.expiryDays || !user.passwordChangedAt) {
-      return null;
-    }
-
-    const expiryDate = new Date(user.passwordChangedAt);
-    expiryDate.setDate(expiryDate.getDate() + this.config.expiryDays);
-    
-    const daysRemaining = Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    return Math.max(0, daysRemaining);
   }
 
   /**
@@ -436,7 +357,8 @@ export class PasswordHandler {
       
       // Check cache if not found
       if (!resetToken) {
-        resetToken = await this.cache.get<PasswordResetToken>(`reset:${hashedToken}`);
+        const cachedToken = await this.cache.get<PasswordResetToken>(`reset:${hashedToken}`);
+        resetToken = cachedToken === null ? undefined : cachedToken;
       }
 
       if (!resetToken || resetToken.used || resetToken.expiresAt < new Date()) {

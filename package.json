@@ -17,7 +17,8 @@
     "release": "turbo build --filter=@modular-app/web && changeset publish",
     "db:migrate": "node scripts/migration.js",
     "plugin:generate": "node scripts/generate-plugin.js",
-    "fresh-install": "pnpm clean && rm -rf node_modules && rm -rf packages/*/node_modules && rm -rf apps/*/node_modules && pnpm install"
+    "fresh-install": "pnpm clean && rm -rf node_modules && rm -rf packages/*/node_modules && rm -rf apps/*/node_modules && pnpm install",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.1",
@@ -25,6 +26,7 @@
     "@typescript-eslint/parser": "^6.14.0",
     "eslint": "^8.55.0",
     "eslint-config-prettier": "^9.1.0",
+    "husky": "^9.1.7",
     "inquirer": "^9.2.12",
     "prettier": "^3.1.0",
     "turbo": "^1.11.2",

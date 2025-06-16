@@ -356,34 +356,36 @@ export class MiddlewareManager {
    */
   public createRateLimitMiddleware(config: RateLimitConfig): MiddlewareFunction {
     const limiter = rateLimit({
-      windowMs: config.windowMs,
-      max: config.maxRequests,
-      skipSuccessfulRequests: config.skipSuccessfulRequests,
-      skipFailedRequests: config.skipFailedRequests,
-      keyGenerator: config.keyGenerator || ((req: APIRequest) => req.ip),
-      handler: (req: APIRequest, res: APIResponse) => {
-        // Emit rate limit event
-        this.events.emit(APIEventType.RATE_LIMIT_EXCEEDED, {
-          ip: req.ip,
-          path: req.path,
-          method: req.method,
-          timestamp: new Date(),
-        });
+  windowMs: config.windowMs,
+  max: config.maxRequests,
+  // Use nullish coalescing to provide defaults instead of potentially undefined values
+  ...(config.skipSuccessfulRequests !== undefined && { skipSuccessfulRequests: config.skipSuccessfulRequests }),
+  ...(config.skipFailedRequests !== undefined && { skipFailedRequests: config.skipFailedRequests }),
+  keyGenerator: config.keyGenerator || ((req: Request) => req.ip || 'unknown'),
+  handler: (req: Request, res: Response) => {
+    const apiReq = req as APIRequest;
 
-        if (config.onLimitReached) {
-          config.onLimitReached(req, res);
-        } else {
-          res.status(429).json({
-            success: false,
-            error: {
-              code: 'RATE_LIMIT_EXCEEDED',
-              message: 'Too many requests',
-              retryAfter: Math.ceil(config.windowMs / 1000),
-            },
-          });
-        }
-      },
+    this.events.emit(APIEventType.RATE_LIMIT_EXCEEDED, {
+      ip: apiReq.ip,
+      path: apiReq.path,
+      method: apiReq.method,
+      timestamp: new Date(),
     });
+
+    if (config.onLimitReached) {
+      config.onLimitReached(apiReq, res as APIResponse);
+    } else {
+      res.status(429).json({
+        success: false,
+        error: {
+          code: 'RATE_LIMIT_EXCEEDED',
+          message: 'Too many requests',
+          retryAfter: Math.ceil(config.windowMs / 1000),
+        },
+      });
+    }
+  },
+});
 
     return limiter as MiddlewareFunction;
   }
@@ -436,66 +438,69 @@ export class MiddlewareManager {
   }
 
   /**
-   * Create caching middleware
-   */
-  public createCacheMiddleware(ttl: number = 300, keyGenerator?: (req: APIRequest) => string): MiddlewareFunction {
-    return async (req: APIRequest, res: APIResponse, next: NextFunction) => {
-      try {
-        // Only cache GET requests
-        if (req.method !== 'GET') {
-          return next();
-        }
+ * Create caching middleware
+ */
+public createCacheMiddleware(ttl: number = 300, keyGenerator?: (req: APIRequest) => string): MiddlewareFunction {
+  return async (req: APIRequest, res: APIResponse, next: NextFunction) => {
+    try {
+      // Only cache GET requests
+      if (req.method !== 'GET') {
+        next();
+        return; // Return void, not the result of next()
+      }
 
-        // Generate cache key
-        const cacheKey = keyGenerator ? keyGenerator(req) : `api:${req.path}:${JSON.stringify(req.query)}`;
+      // Generate cache key
+      const cacheKey = keyGenerator ? keyGenerator(req) : `api:${req.path}:${JSON.stringify(req.query)}`;
 
-        // Try to get from cache
-        const cached = await this.cache.get(cacheKey);
-        if (cached) {
-          // Emit cache hit event
-          await this.events.emit(APIEventType.CACHE_HIT, {
-            key: cacheKey,
-            path: req.path,
-            timestamp: new Date(),
-          });
-
-          return res.json({
-            ...cached,
-            meta: {
-              ...cached.meta,
-              cached: true,
-              cacheKey,
-            },
-          });
-        }
-
-        // Emit cache miss event
-        await this.events.emit(APIEventType.CACHE_MISS, {
+      // Try to get from cache
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        // Emit cache hit event
+        await this.events.emit(APIEventType.CACHE_HIT, {
           key: cacheKey,
           path: req.path,
           timestamp: new Date(),
         });
 
-        // Override res.json to cache the response
-        const originalJson = res.json.bind(res);
-        res.json = (body: any) => {
-          // Cache successful responses
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            this.cache.set(cacheKey, body, ttl).catch(error => {
-              this.logger.error('Cache set error:', error);
-            });
-          }
-          return originalJson(body);
-        };MiddlewareManager.bind(this);
-
-        next();
-
-      } catch (error) {
-        this.logger.error('Cache middleware error:', error);
-        next();
+        // DON'T return res.json() - just call it
+        res.json({
+          ...cached,
+          meta: {
+            ...(cached as any)?.meta || {}, // Provide default empty object if meta doesn't exist
+            cached: true,
+            cacheKey,
+          },
+        });
+        return; // Return void
       }
-    };
-  }
+
+      // Emit cache miss event
+      await this.events.emit(APIEventType.CACHE_MISS, {
+        key: cacheKey,
+        path: req.path,
+        timestamp: new Date(),
+      });
+
+      // Override res.json to cache the response
+      const originalJson = res.json.bind(res);
+      res.json = (body: any) => {
+        // Cache successful responses
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          this.cache.set(cacheKey, body, ttl).catch(error => {
+            this.logger.error('Cache set error:', error);
+          });
+        }
+        return originalJson(body);
+      };
+
+      next();
+
+    } catch (error) {
+      this.logger.error('Cache middleware error:', error);
+      next();
+    }
+  };
+}
 
   /**
    * Create logging middleware

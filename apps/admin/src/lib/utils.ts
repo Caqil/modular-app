@@ -59,22 +59,26 @@ export const AdminUtils = {
     }
   },
 
-  /**
-   * Generate consistent color for avatars based on string
-   */
-  getAvatarColor(seed: string): string {
-    let hash = 0;
-    for (let i = 0; i < seed.length; i++) {
-      hash = seed.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    
-    const colors = [
-      '#3b82f6', '#8b5cf6', '#06b6d4', '#10b981',
-      '#f59e0b', '#ef4444', '#ec4899', '#6366f1'
-    ];
-    
-    return colors[Math.abs(hash) % colors.length];
-  },
+/**
+ * Generate consistent color for avatars based on string
+ * IMMEDIATE FIX: Replace your existing getAvatarColor function with this
+ */
+getAvatarColorAlt(seed: string | undefined | null): string {
+  const safeSeed = (seed?.trim() || 'default-user');
+  
+  let hash = 0;
+  for (let i = 0; i < safeSeed.length; i++) {
+    hash = safeSeed.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  const colors = [
+    '#3b82f6', '#8b5cf6', '#06b6d4', '#10b981',
+    '#f59e0b', '#ef4444', '#ec4899', '#6366f1'
+  ] as const; // Mark as readonly tuple
+  
+  const index = Math.abs(hash || 0) % colors.length;
+  return colors[index]!; // Non-null assertion since we know index is valid
+},
 
   /**
    * Debounce function for search inputs

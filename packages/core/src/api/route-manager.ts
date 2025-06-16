@@ -173,22 +173,23 @@ export class RouteManager {
       }
 
       // Create route object
-      const route: APIRoute = {
-        id: routeId,
-        path: this.normalizePath(path),
-        method,
-        handler: this.wrapHandler(handler, options),
-        middleware: options.middleware || [],
-        permissions: options.permissions || [],
-        roles: options.roles || [],
-        validation: options.validation,
-        documentation: options.documentation,
-        enabled: options.enabled !== false,
-        public: !options.permissions && !options.roles,
-        plugin: options.plugin,
-        priority: options.priority || 0,
-        cache: this.resolveCacheConfig(options.cache),
-      };
+     const route: APIRoute = {
+  id: routeId,
+  path: this.normalizePath(path),
+  method,
+  handler: this.wrapHandler(handler, options),
+  middleware: options.middleware || [],
+  permissions: options.permissions || [],
+  roles: options.roles || [],
+  ...(options.validation && { validation: options.validation }),
+  ...(options.documentation && { documentation: options.documentation }),
+  enabled: options.enabled !== false,
+  public: !options.permissions && !options.roles,
+  ...(options.plugin && { plugin: options.plugin }),
+  priority: options.priority || 0,
+  cache: this.resolveCacheConfig(options.cache),
+};
+
 
       // Apply hooks for route registration
       const processedRoute = await this.hooks.applyFilters('api:route:register', route);
@@ -248,7 +249,7 @@ export class RouteManager {
         );
         routeIds.push(routeId);
       } catch (error) {
-        this.logger.error('Failed to register route:', error, route);
+        this.logger.error('Failed to register route:', error);
         // Continue with other routes
       }
     }
@@ -276,7 +277,7 @@ export class RouteManager {
         );
         routeIds.push(routeId);
       } catch (error) {
-        this.logger.error('Failed to register plugin route:', error, route);
+        this.logger.error('Failed to register plugin route:', error);
       }
     }
 
@@ -393,7 +394,8 @@ export class RouteManager {
    */
   public getRouteMetrics(routeId?: string): RouteMetrics | RouteMetrics[] {
     if (routeId) {
-      return this.metrics.get(routeId);
+      const metric = this.metrics.get(routeId);
+      return metric ? metric : [];
     }
     return Array.from(this.metrics.values());
   }
@@ -500,7 +502,9 @@ export class RouteManager {
         // Set request context
         req.requestId = this.generateRequestId();
         req.startTime = Date.now();
-        req.plugin = options.plugin;
+        if (options.plugin !== undefined) {
+          req.plugin = options.plugin;
+        }
 
         // Apply validation if configured
         if (this.managerConfig.enableValidation && options.validation) {
@@ -526,7 +530,7 @@ export class RouteManager {
     const expressMethod = route.method.toLowerCase() as keyof Router;
     
     if (typeof this.router[expressMethod] === 'function') {
-      (this.router[expressMethod] as any)(route.path, ...route.middleware, route.handler);
+      (this.router[expressMethod] as any)(route.path, ...(route.middleware || []), route.handler);
     }
   }
 
@@ -595,28 +599,97 @@ export class RouteManager {
     };
   }
 
-  private async validateRequest(req: APIRequest, validation: ValidationConfig): Promise<void> {
-    const errors: string[] = [];
+private async validateRequest(req: APIRequest, validation: ValidationConfig): Promise<void> {
+  const errors: string[] = [];
 
-    if (validation.params) {
-      const paramErrors = Validator.validateObject(req.params, validation.params);
-      errors.push(...paramErrors);
+  // Helper function to validate against custom ValidationSchema
+  const validateData = (data: any, schema: any, prefix: string): string[] => {
+    const fieldErrors: string[] = [];
+    
+    if (!schema) return fieldErrors;
+
+    for (const [key, rule] of Object.entries(schema)) {
+      const value = data?.[key];
+      const fieldPath = `${prefix}.${key}`;
+      
+      // Type assertion to treat rule as ValidationRule
+      const validationRule = rule as any;
+      
+      // Check if field is required
+      if (validationRule.required && (value === undefined || value === null || value === '')) {
+        fieldErrors.push(`${fieldPath}: Field is required`);
+        continue;
+      }
+
+      // Skip validation if field is empty and not required
+      if (value === undefined || value === null || value === '') {
+        continue;
+      }
+
+      // Basic type checking
+      if (validationRule.type === 'string' && typeof value !== 'string') {
+        fieldErrors.push(`${fieldPath}: Expected string, got ${typeof value}`);
+      } else if (validationRule.type === 'number' && isNaN(Number(value))) {
+        fieldErrors.push(`${fieldPath}: Expected number, got ${typeof value}`);
+      } else if (validationRule.type === 'email' && typeof value === 'string') {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          fieldErrors.push(`${fieldPath}: Invalid email format`);
+        }
+      } else if (validationRule.type === 'objectid' && typeof value === 'string') {
+        if (!/^[a-fA-F0-9]{24}$/.test(value)) {
+          fieldErrors.push(`${fieldPath}: Invalid ObjectId format`);
+        }
+      }
+
+      // Length validation for strings
+      if (typeof value === 'string') {
+        if (validationRule.minLength && value.length < validationRule.minLength) {
+          fieldErrors.push(`${fieldPath}: Minimum length is ${validationRule.minLength}`);
+        }
+        if (validationRule.maxLength && value.length > validationRule.maxLength) {
+          fieldErrors.push(`${fieldPath}: Maximum length is ${validationRule.maxLength}`);
+        }
+      }
+
+      // Pattern validation
+      if (validationRule.pattern && typeof value === 'string') {
+        const regex = typeof validationRule.pattern === 'string' 
+          ? new RegExp(validationRule.pattern) 
+          : validationRule.pattern;
+        if (!regex.test(value)) {
+          fieldErrors.push(`${fieldPath}: Does not match required pattern`);
+        }
+      }
     }
 
-    if (validation.query) {
-      const queryErrors = Validator.validateObject(req.query, validation.query);
-      errors.push(...queryErrors);
-    }
+    return fieldErrors;
+  };
 
-    if (validation.body) {
-      const bodyErrors = Validator.validateObject(req.body, validation.body);
-      errors.push(...bodyErrors);
-    }
-
-    if (errors.length > 0) {
-      throw new Error(`Validation failed: ${errors.join(', ')}`);
-    }
+  // Validate each section
+  if (validation.params) {
+    const paramErrors = validateData(req.params, validation.params, 'params');
+    errors.push(...paramErrors);
   }
+
+  if (validation.query) {
+    const queryErrors = validateData(req.query, validation.query, 'query');
+    errors.push(...queryErrors);
+  }
+
+  if (validation.body) {
+    const bodyErrors = validateData(req.body, validation.body, 'body');
+    errors.push(...bodyErrors);
+  }
+
+  if (validation.headers) {
+    const headerErrors = validateData(req.headers, validation.headers, 'headers');
+    errors.push(...headerErrors);
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Validation failed: ${errors.join(', ')}`);
+  }
+}
 
   private async checkPermissions(
     req: APIRequest,
@@ -685,7 +758,7 @@ export class RouteManager {
       const requestSegment = requestSegments[i];
 
       // Parameter segment (starts with :)
-      if (routeSegment.startsWith(':')) {
+      if (routeSegment && routeSegment.startsWith(':')) {
         continue;
       }
 
