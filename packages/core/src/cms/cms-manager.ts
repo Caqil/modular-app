@@ -199,7 +199,7 @@ export class CMSManager implements CMSInstance {
       this.logger.info('🛑 Shutting down Modular CMS...');
       this._status = CMSStatus.SHUTTING_DOWN;
 
-      await this._events.emit(EventType.CMS_SHUTTING_DOWN);
+      await this._events.emit(EventType.CMS_SHUTDOWN);
 
       // Stop health monitoring
       if (this._healthCheckInterval) {
@@ -210,7 +210,6 @@ export class CMSManager implements CMSInstance {
       await this._plugins.shutdown();
       await this._themes.shutdown();
       await this._hooks.shutdown();
-      await this._cache.disconnect();
       await this._database.disconnect();
 
       this._status = CMSStatus.SHUTDOWN;
@@ -240,8 +239,7 @@ export class CMSManager implements CMSInstance {
       activePlugins: pluginStats.active,
       activeTheme: String(themeStats.active || 'none'),
       memoryUsage,
-      databaseConnections: 1, // Single connection for now
-      cacheHitRate: cacheStats?.hitRate,
+      databaseConnections: 1, 
     };
 
     return this._stats;
@@ -260,7 +258,7 @@ export class CMSManager implements CMSInstance {
       status: this._status,
       uptime: this.getUptime(),
       database: databaseHealthy,
-      cache: cacheHealthy,
+      cache: !!cacheHealthy,
       plugins: pluginStats.total,
       themes: themeStats.total,
       errors: this._errors.slice(-10), // Last 10 errors
@@ -332,7 +330,7 @@ export class CMSManager implements CMSInstance {
     });
 
     if (cacheConfig.enabled) {
-      await this._cache.connect(cacheConfig);
+      await this._cache.initialize();
     }
     
     this.logger.debug('Cache initialized');
@@ -361,23 +359,23 @@ export class CMSManager implements CMSInstance {
     this.logger.debug('Core managers initialized');
   }
 
-  /**
-   * Initialize plugins
-   */
-  private async initializePlugins(): Promise<void> {
-    this.logger.debug('Initializing plugins...');
-    await this._plugins.initialize(Plugin);
-    this.logger.debug('Plugins initialized');
-  }
+/**
+ * Initialize plugins
+ */
+private async initializePlugins(): Promise<void> {
+  this.logger.debug('Initializing plugins...');
+  await this._plugins.initialize(Plugin as any);
+  this.logger.debug('Plugins initialized');
+}
 
-  /**
-   * Initialize themes
-   */
-  private async initializeThemes(): Promise<void> {
-    this.logger.debug('Initializing themes...');
-    await this._themes.initialize(Theme);
-    this.logger.debug('Themes initialized');
-  }
+/**
+ * Initialize themes
+ */
+private async initializeThemes(): Promise<void> {
+  this.logger.debug('Initializing themes...');
+  await this._themes.initialize(Theme as any);
+  this.logger.debug('Themes initialized');
+}
 
   /**
    * Start health monitoring
@@ -420,7 +418,7 @@ export class CMSManager implements CMSInstance {
     return {
       code,
       message,
-      details,
+      details: details ?? {},
       timestamp: new Date(),
     };
   }

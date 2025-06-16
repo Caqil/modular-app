@@ -7,8 +7,13 @@ import { Validator } from '../utils/validator';
 import { Sanitizer } from '../utils/sanitizer';
 import { EventType } from '../events/event-types';
 import { CoreHooks, CoreFilters } from '../hooks/hook-types';
-import { SettingsRepository } from '../database/repositories/settings-repository';
-import { type ISetting } from '../database/models';
+import { SettingDefinition, SettingsRepository } from '../database/repositories/settings-repository';
+import { type ISetting as OriginalISetting } from '../database/models';
+
+// Extend ISetting to include 'encrypted' property
+export interface ISetting extends OriginalISetting {
+  encrypted?: boolean;
+}
 
 export interface SettingsManagerConfig {
   cacheEnabled: boolean;
@@ -21,32 +26,6 @@ export interface SettingsManagerConfig {
   backupInterval: number;
 }
 
-export interface SettingDefinition {
-  key: string;
-  type: 'string' | 'number' | 'boolean' | 'json';
-  defaultValue: any;
-  label: string;
-  description?: string;
-  group: string;
-  section?: string;
-  public: boolean;
-  required?: boolean;
-  validation?: {
-    min?: number;
-    max?: number;
-    pattern?: RegExp;
-    enum?: any[];
-    custom?: (value: any) => boolean | string;
-  };
-  choices?: Record<string, string>;
-  conditional?: {
-    dependsOn: string;
-    value: any;
-    operator?: '=' | '!=' | '>' | '<' | '>=' | '<=' | 'in' | 'not_in';
-  };
-  encrypted?: boolean;
-  sensitive?: boolean;
-}
 
 export interface SettingGroup {
   name: string;
@@ -211,8 +190,8 @@ export class SettingsManager {
       // Check cache first
       if (config.cacheEnabled) {
         const cached = await this.cache.get<T>(cacheKey);
-        if (cached !== undefined) {
-          return cached;
+        if (cached !== null && cached !== undefined) {
+          return cached as T;
         }
       }
 
@@ -254,89 +233,110 @@ export class SettingsManager {
     }
   }
 
-  /**
-   * Set setting value
-   */
-  public async setSetting(
-    key: string,
-    value: any,
-    options: {
-      group?: string;
-      section?: string;
-      validate?: boolean;
-      changedBy?: string;
-      reason?: string;
-    } = {}
-  ): Promise<void> {
-    try {
-      this.logger.debug('Setting value', { key, value: this.sanitizeLogValue(value) });
+/**
+ * Set setting value
+ */
+public async setSetting(
+  key: string,
+  value: any,
+  options: {
+    group?: string;
+    section?: string;
+    validate?: boolean;
+    changedBy?: string;
+    reason?: string;
+  } = {}
+): Promise<void> {
+  try {
+    this.logger.debug('Setting value', { key, value: this.sanitizeLogValue(value) });
 
-      const config = await this.config.get('settings', this.defaultConfig);
-      const definition = this.definitions.get(key);
+    const config = await this.config.get('settings', this.defaultConfig);
+    const definition = this.definitions.get(key);
 
-      // Validate value if enabled
-      if ((options.validate ?? config.enableValidation) && definition) {
-        await this.validateSettingValue(key, value, definition);
-      }
-
-      // Sanitize value
-      const sanitizedValue = await this.sanitizeSettingValue(value, definition);
-
-      // Get current value for history
-      const currentSetting = await this.settingsRepo.getSetting(key);
-      const oldValue = currentSetting?.value;
-
-      // Encrypt value if needed
-      let finalValue = sanitizedValue;
-      const shouldEncrypt = definition?.encrypted && config.enableEncryption;
-      
-      if (shouldEncrypt) {
-        finalValue = await this.encryptValue(sanitizedValue);
-      }
-
-      // Prepare setting data
-      const settingData: Partial<ISetting> = {
-        key,
-        value: finalValue,
-        type: definition?.type || this.mapJsTypeToSettingType(sanitizedValue),
-        group: options.group || definition?.group || 'general',
-        section: options.section || definition?.section,
-        public: definition?.public ?? true,
-        encrypted: shouldEncrypt || false,
-      };
-
-      // Update or create setting
-      await this.settingsRepo.setSetting(key, settingData);
-
-      // Add to history
-      if (config.enableHistory && oldValue !== sanitizedValue) {
-        this.addToHistory(key, oldValue, sanitizedValue, options.changedBy, options.reason);
-      }
-
-      // Clear cache
-      await this.clearSettingCache(key);
-
-      // Emit events
-      await this.events.emit(EventType.CMS_CONFIG_CHANGED, {
-        key,
-        oldValue,
-        newValue: sanitizedValue,
-        changedBy: options.changedBy,
-        timestamp: new Date(),
-      });
-
-      this.logger.info('Setting updated successfully', {
-        key,
-        group: settingData.group,
-        public: settingData.public,
-      });
-
-    } catch (error) {
-      this.logger.error(`Error setting '${key}':`, error);
-      throw error;
+    // Validate value if enabled
+    if ((options.validate ?? config.enableValidation) && definition) {
+      await this.validateSettingValue(key, value, definition);
     }
-  }
 
+    // Sanitize value
+    const sanitizedValue = await this.sanitizeSettingValue(value, definition);
+
+    // Get current value for history
+    const currentSetting = await this.settingsRepo.getSetting(key);
+    const oldValue = currentSetting?.value;
+
+    // Encrypt value if needed
+    let finalValue = sanitizedValue;
+    const shouldEncrypt = definition?.encrypted && config.enableEncryption;
+    
+    if (shouldEncrypt) {
+      finalValue = await this.encryptValue(sanitizedValue);
+    }
+
+    // Fix: Map JS types to valid ISetting types
+    const mappedType = this.mapJsTypeToSettingType(sanitizedValue);
+    
+    // Prepare setting data (only include properties that exist on ISetting)
+    const settingData: Partial<ISetting> = {
+      key,
+      value: finalValue,
+      type: definition?.type || mappedType,
+      group: options.group || definition?.group || 'general',
+      // Remove section and encrypted - they don't exist on ISetting interface
+      public: definition?.public ?? true,
+    };
+
+    // Update or create setting
+    await this.settingsRepo.setSetting(key, settingData);
+
+    // Add to history
+    if (config.enableHistory && oldValue !== sanitizedValue) {
+      this.addToHistory(key, oldValue, sanitizedValue, options.changedBy, options.reason);
+    }
+
+    // Clear cache
+    await this.clearSettingCache(key);
+
+    // Emit events
+    await this.events.emit(EventType.CMS_CONFIG_CHANGED, {
+      key,
+      oldValue,
+      newValue: sanitizedValue,
+      changedBy: options.changedBy,
+      timestamp: new Date(),
+    });
+
+    this.logger.info('Setting updated successfully', {
+      key,
+      group: settingData.group,
+      public: settingData.public,
+    });
+
+  } catch (error) {
+    this.logger.error(`Error setting '${key}':`, error);
+    throw error;
+  }
+}
+
+/**
+ * Map JavaScript type to valid ISetting type
+ */
+private mapJsTypeToSettingType(value: any): ISetting['type'] {
+  if (typeof value === 'string') {
+    return 'string';
+  }
+  if (typeof value === 'number') {
+    return 'number';
+  }
+  if (typeof value === 'boolean') {
+    return 'boolean';
+  }
+  // Map object, array, and any other complex type to 'json'
+  if (typeof value === 'object') {
+    return 'json';
+  }
+  return 'json';
+}
   /**
    * Get multiple settings by group or keys
    */
@@ -386,7 +386,8 @@ export class SettingsManager {
         let value = setting.value;
 
         // Decrypt if needed
-        if (setting.encrypted && config.enableEncryption) {
+       const definition = this.definitions.get(setting.key);
+if (definition?.encrypted && config.enableEncryption) {
           try {
             value = await this.decryptValue(value);
           } catch (error) {
@@ -594,81 +595,83 @@ export class SettingsManager {
   // IMPORT/EXPORT
   // ===================================================================
 
-  /**
-   * Export settings
-   */
-  public async exportSettings(options: {
-    groups?: string[];
-    publicOnly?: boolean;
-    includeDefaults?: boolean;
-  } = {}): Promise<SettingsExport> {
-    try {
-      this.logger.info('Exporting settings', options);
+ /**
+ * Export settings
+ */
+public async exportSettings(options: {
+  groups?: string[];
+  publicOnly?: boolean;
+  includeDefaults?: boolean;
+} = {}): Promise<SettingsExport> {
+  try {
+    this.logger.info('Exporting settings', options);
 
-      // Get settings based on options
-      const filter: Record<string, any> = {};
-      
-      if (options.groups) {
-        filter.group = { $in: options.groups };
+    // Get settings based on options
+    const filter: Record<string, any> = {};
+    
+    if (options.groups) {
+      filter.group = { $in: options.groups };
+    }
+
+    if (options.publicOnly) {
+      filter.public = true;
+    }
+
+    const settings = await this.settingsRepo.findMany(filter);
+    const settingsMap: Record<string, any> = {};
+
+    for (const setting of settings) {
+      let value = setting.value;
+
+      const definition = this.definitions.get(setting.key);
+      if (definition?.encrypted) {
+        continue; 
       }
 
-      if (options.publicOnly) {
-        filter.public = true;
-      }
+      settingsMap[setting.key] = value;
+    }
 
-      const settings = await this.settingsRepo.findMany(filter);
-      const settingsMap: Record<string, any> = {};
-
-      for (const setting of settings) {
-        let value = setting.value;
-
-        // Don't export encrypted values
-        if (setting.encrypted) {
-          continue;
-        }
-
-        settingsMap[setting.key] = value;
-      }
-
-      // Include defaults if requested
-      if (options.includeDefaults) {
-        for (const [key, definition] of this.definitions) {
-          if (!settingsMap.hasOwnProperty(key)) {
-            if (!options.groups || options.groups.includes(definition.group)) {
-              if (!options.publicOnly || definition.public) {
+    // Include defaults if requested
+    if (options.includeDefaults) {
+      for (const [key, definition] of this.definitions) {
+        if (!settingsMap.hasOwnProperty(key)) {
+          if (!options.groups || options.groups.includes(definition.group)) {
+            if (!options.publicOnly || definition.public) {
+              // Don't include encrypted defaults
+              if (!definition.encrypted) {
                 settingsMap[key] = definition.defaultValue;
               }
             }
           }
         }
       }
-
-      const exportData: SettingsExport = {
-        version: '1.0.0',
-        timestamp: new Date(),
-        settings: settingsMap,
-        groups: options.groups ? 
-          this.getGroups().filter(g => options.groups!.includes(g.name)) :
-          this.getGroups(),
-        metadata: {
-          totalSettings: Object.keys(settingsMap).length,
-          includesPublic: !options.publicOnly || options.publicOnly,
-          includesPrivate: !options.publicOnly,
-        },
-      };
-
-      this.logger.info('Settings exported successfully', {
-        count: exportData.metadata.totalSettings,
-      });
-
-      return exportData;
-
-    } catch (error) {
-      this.logger.error('Error exporting settings:', error);
-      throw error;
     }
-  }
 
+    const exportData: SettingsExport = {
+      version: '1.0.0',
+      timestamp: new Date(),
+      settings: settingsMap,
+      groups: options.groups ? 
+        this.getGroups().filter(g => options.groups!.includes(g.name)) :
+        this.getGroups(),
+      metadata: {
+        totalSettings: Object.keys(settingsMap).length,
+        includesPublic: !options.publicOnly || options.publicOnly,
+        includesPrivate: !options.publicOnly,
+      },
+    };
+
+    this.logger.info('Settings exported successfully', {
+      count: exportData.metadata.totalSettings,
+    });
+
+    return exportData;
+
+  } catch (error) {
+    this.logger.error('Error exporting settings:', error);
+    throw error;
+  }
+}
   /**
    * Import settings
    */
@@ -1051,18 +1054,7 @@ export class SettingsManager {
     return value;
   }
 
-  /**
-   * Map JavaScript typeof to allowed setting types
-   */
-  private mapJsTypeToSettingType(value: any): 'string' | 'number' | 'boolean' | 'json' {
-    const t = typeof value;
-    if (t === 'string') return 'string';
-    if (t === 'number') return 'number';
-    if (t === 'boolean') return 'boolean';
-    // Treat arrays and objects as 'json'
-    if (t === 'object' && value !== null) return 'json';
-    return 'string'; // fallback
-  }
+  
 }
 
 /**

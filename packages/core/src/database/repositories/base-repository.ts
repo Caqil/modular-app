@@ -1,4 +1,4 @@
-import { Model, Document, Types, FilterQuery, UpdateQuery } from 'mongoose';
+import { Model, Document, Types, FilterQuery, UpdateQuery, PipelineStage } from 'mongoose';
 import type {
   BaseRepository as IBaseRepository,
   QueryOptions as CustomQueryOptions,
@@ -481,26 +481,22 @@ export abstract class BaseRepository<T extends Document> implements IBaseReposit
     }
   }
 
-  /**
-   * Aggregate documents
-   */
-  async aggregate(pipeline: AggregationPipeline[]): Promise<any[]> {
-    try {
-      this.logger.debug(`Aggregating ${this.modelName}`, {
-        pipelineStages: pipeline.length,
-      });
+  async aggregate(pipeline: PipelineStage[]): Promise<any[]> {
+  try {
+    this.logger.debug(`Aggregating ${this.modelName}`, {
+      pipelineStages: pipeline.length,
+    });
 
-      const results = await this.model.aggregate(pipeline).exec();
+    const results = await this.model.aggregate(pipeline).exec();
 
-      this.logger.debug(`Aggregation returned ${results.length} results`);
+    this.logger.debug(`Aggregation returned ${results.length} results`);
 
-      return results;
-    } catch (error) {
-      this.logger.error(`Error aggregating ${this.modelName}:`, error);
-      throw error;
-    }
+    return results;
+  } catch (error) {
+    this.logger.error(`Error aggregating ${this.modelName}:`, error);
+    throw error;
   }
-
+}
   /**
    * Check if document exists
    */

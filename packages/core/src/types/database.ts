@@ -1,4 +1,4 @@
-import type { Connection, Model, Document, QueryOptions as MongooseQueryOptions } from 'mongoose';
+import type { Connection, Model, Document, QueryOptions as MongooseQueryOptions, PipelineStage } from 'mongoose';
 import type { Types } from 'mongoose';
 import type { PopulateOptions } from 'mongoose';
 export interface DatabaseConfig {
@@ -128,7 +128,7 @@ export interface BaseRepository<T extends Document> {
   count(filter?: Record<string, any>): Promise<number>;
   paginate(filter: Record<string, any>, options: PaginationOptions): Promise<PaginatedResult<T>>;
   search(options: SearchOptions, filter?: Record<string, any>): Promise<T[]>;
-  aggregate(pipeline: AggregationPipeline[]): Promise<any[]>;
+  aggregate(pipeline: PipelineStage[]): Promise<any[]>; // Changed from AggregationPipeline[] to PipelineStage[]
 }
 
 export interface Migration {

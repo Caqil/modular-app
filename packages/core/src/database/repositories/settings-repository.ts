@@ -13,23 +13,34 @@ export interface SettingGroup {
   appearance: Record<string, any>;
   [key: string]: Record<string, any>;
 }
-
 export interface SettingDefinition {
   key: string;
   type: 'string' | 'number' | 'boolean' | 'json';
   defaultValue: any;
-  description: string;
+  label: string;
+  description?: string;
   group: string;
+  section?: string;
   public: boolean;
+  required?: boolean;
   editable: boolean;
   validation?: {
-    required?: boolean;
     min?: number;
     max?: number;
-    pattern?: string;
+    pattern?: RegExp;
     enum?: any[];
+    custom?: (value: any) => boolean | string;
   };
+  choices?: Record<string, string>;
+  conditional?: {
+    dependsOn: string;
+    value: any;
+    operator?: '=' | '!=' | '>' | '<' | '>=' | '<=' | 'in' | 'not_in';
+  };
+  encrypted?: boolean;
+  sensitive?: boolean;
 }
+
 
 export class SettingsRepository extends BaseRepository<ISetting> {
   private cache = new Map<string, any>();

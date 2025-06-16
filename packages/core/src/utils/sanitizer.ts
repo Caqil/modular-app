@@ -260,7 +260,11 @@ export class Sanitizer {
       .replace(/\s+/g, ' ')
       .substring(0, 100); // Limit search query length
   }
-
+ static isValidFilename(filename: string): boolean {
+    // Disallow path traversal and illegal characters
+    // This regex allows alphanumeric, dash, underscore, dot, and space
+    return /^[a-zA-Z0-9_\-\. ]+$/.test(filename) && !filename.includes('..') && !filename.includes('/');
+  }
   /**
    * Sanitize CSS
    */

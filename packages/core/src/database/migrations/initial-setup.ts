@@ -122,7 +122,7 @@ export class InitialSetup {
    */
   async run(config: SetupConfig): Promise<SetupResult> {
     const startTime = Date.now();
-    
+    let settingsResult = { count: 0, initialized: [] };
     try {
       this.logger.info('Starting initial CMS setup...');
       

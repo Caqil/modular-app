@@ -15,7 +15,7 @@ import { CoreHooks, CoreFilters } from '../hooks/hook-types';
 import { PaginatedResult } from '../types/database';
 import { UserRepository } from '../database/repositories/user-repository';
 import { type IUser } from '../database/models';
-import { UserRole, UserStats, UserStatus, type LoginCredentials, type UserProfile } from '../types/user';
+import { UserQuery, UserRole, UserSession, UserStats, UserStatus, type LoginCredentials, type UserProfile } from '../types/user';
 
 export interface UserManagerConfig {
   jwtSecret: string;
@@ -54,18 +54,6 @@ export interface AuthResult {
   twoFactorToken?: string;
 }
 
-export interface UserSession {
-  id: string;
-  userId: Types.ObjectId;
-  token: string;
-  refreshToken: string;
-  createdAt: Date;
-  expiresAt: Date;
-  lastActivity: Date;
-  ipAddress?: string;
-  userAgent?: string;
-  isActive: boolean;
-}
 
 export interface TwoFactorSetup {
   secret: string;
@@ -283,11 +271,14 @@ export class UserManager {
       const session = await this.createSession(user, tokens, credentials);
 
       // Update user login info
-      await this.userRepo.updateById(user.id.toString(), {
-        lastLoginAt: new Date(),
-        lastLoginIp: credentials.ipAddress,
-        loginCount: (user.loginCount || 0) + 1,
-      });
+     await this.userRepo.updateById(user.id.toString(), {
+  lastLogin: new Date(),
+  stats: {
+    ...user.stats,
+    lastLoginAt: new Date(),
+    loginCount: (user.stats?.loginCount || 0) + 1,
+  }
+});
 
       // Clear failed login attempts
       this.loginAttempts.delete(identifier);
@@ -399,7 +390,7 @@ export class UserManager {
       if (session) {
         session.token = tokens.accessToken;
         session.refreshToken = tokens.refreshToken;
-        session.lastActivity = new Date();
+        session.lastUsed = new Date();
       }
 
       return {
@@ -560,43 +551,43 @@ export class UserManager {
     }
   }
 
-  /**
-   * Get users with pagination and filtering
-   */
-  public async getUsers(query: UserQuery = {}): Promise<PaginatedResult<IUser>> {
-    try {
-      const cacheKey = `users:${JSON.stringify(query)}`;
-      const config = await this.config.get('users', this.defaultConfig);
+ /**
+ * Get users with pagination and filtering
+ */
+public async getUsers(query: UserQuery = {}): Promise<PaginatedResult<IUser>> {
+  try {
+    const cacheKey = `users:${JSON.stringify(query)}`;
+    const config = await this.config.get('users', this.defaultConfig);
 
-      // Check cache first
-      if (config.cacheEnabled) {
-        const cached = await this.cache.get<PaginatedResult<IUser>>(cacheKey);
-        if (cached) {
-          return cached;
-        }
+    // Check cache first
+    if (config.cacheEnabled) {
+      const cached = await this.cache.get<PaginatedResult<IUser>>(cacheKey);
+      if (cached) {
+        return cached;
       }
-
-      // Get users with pagination
-      const result = await this.userRepo.searchUsers(query);
-
-      // Apply filter hook
-      const filteredResult = await this.hooks.applyFilters(
-        CoreFilters.DATABASE_RESULTS,
-        result
-      );
-
-      // Cache result
-      if (config.cacheEnabled) {
-        await this.cache.set(cacheKey, filteredResult, config.cacheTTL);
-      }
-
-      return filteredResult;
-
-    } catch (error) {
-      this.logger.error('Error getting users:', error);
-      throw error;
     }
+
+    // Fix: Use findWithFilters instead of searchUsers
+    const result = await this.userRepo.findWithFilters(query);
+
+    // Apply filter hook
+    const filteredResult = await this.hooks.applyFilters(
+      CoreFilters.DATABASE_RESULTS,
+      result
+    );
+
+    // Cache result
+    if (config.cacheEnabled) {
+      await this.cache.set(cacheKey, filteredResult, config.cacheTTL);
+    }
+
+    return filteredResult;
+
+  } catch (error) {
+    this.logger.error('Error getting users:', error);
+    throw error;
   }
+}
 
   /**
    * Get user by ID
@@ -847,50 +838,37 @@ export class UserManager {
   // ===================================================================
   // USER STATISTICS
   // ===================================================================
+/**
+ * Get user statistics
+ */
+public async getUserStats(): Promise<UserStats> {
+  try {
+    const cacheKey = 'users:stats';
+    const config = await this.config.get('users', this.defaultConfig);
 
-  /**
-   * Get user statistics
-   */
-  public async getUserStats(): Promise<UserStats> {
-    try {
-      const cacheKey = 'users:stats';
-      const config = await this.config.get('users', this.defaultConfig);
-
-      // Check cache first
-      if (config.cacheEnabled) {
-        const cached = await this.cache.get<UserStats>(cacheKey);
-        if (cached) {
-          return cached;
-        }
+    // Check cache first
+    if (config.cacheEnabled) {
+      const cached = await this.cache.get<UserStats>(cacheKey);
+      if (cached) {
+        return cached;
       }
-
-      const rawStats = await this.userRepo.getStats();
-
-      // Ensure all UserStats fields are present
-      const stats: UserStats = {
-        total: rawStats.total ?? 0,
-        active: rawStats.active ?? 0,
-        inactive: rawStats.inactive ?? 0,
-        suspended: rawStats.suspended ?? 0,
-        pending: rawStats.pending ?? 0,
-        createdToday: rawStats.createdToday ?? 0,
-        createdThisWeek: rawStats.createdThisWeek ?? 0,
-        createdThisMonth: rawStats.createdThisMonth ?? 0,
-        // Add any additional fields required by UserStats here
-      };
-
-      // Cache stats
-      if (config.cacheEnabled) {
-        await this.cache.set(cacheKey, stats, 300); // 5 minutes
-      }
-
-      return stats;
-
-    } catch (error) {
-      this.logger.error('Error getting user stats:', error);
-      throw error;
     }
+
+    // Fix: Call getUserStats instead of getStats
+    const stats = await this.userRepo.getUserStats();
+
+    // Cache stats
+    if (config.cacheEnabled) {
+      await this.cache.set(cacheKey, stats, 300); // 5 minutes
+    }
+
+    return stats;
+
+  } catch (error) {
+    this.logger.error('Error getting user stats:', error);
+    throw error;
   }
+}
 
   // ===================================================================
   // PRIVATE HELPER METHODS
@@ -920,8 +898,7 @@ export class UserManager {
 
     return null;
   }
-
-  /**
+/**
    * Generate JWT tokens
    */
   private async generateTokens(user: IUser): Promise<{
@@ -929,7 +906,7 @@ export class UserManager {
     refreshToken: string;
   }> {
     const config = await this.config.get('users', this.defaultConfig);
-    const sessionId = crypto.randomUUID();
+    const sessionId = crypto.randomBytes(16).toString('hex');
 
     const accessToken = jwt.sign(
       {
@@ -939,8 +916,8 @@ export class UserManager {
         role: user.role,
         sessionId,
       },
-      config.jwtSecret,
-      { expiresIn: config.jwtExpiresIn }
+      config.jwtSecret, // Ensure this is a string or Buffer
+      { expiresIn: config.jwtExpiresIn } as jwt.SignOptions // Explicitly type as SignOptions
     );
 
     const refreshToken = jwt.sign(
@@ -950,11 +927,12 @@ export class UserManager {
         type: 'refresh',
       },
       config.jwtSecret,
-      { expiresIn: config.jwtRefreshExpiresIn }
+      { expiresIn: config.jwtRefreshExpiresIn } as jwt.SignOptions
     );
 
     return { accessToken, refreshToken };
   }
+
 
   /**
    * Create user session
@@ -965,19 +943,19 @@ export class UserManager {
     credentials: LoginCredentials
   ): Promise<UserSession> {
     const config = await this.config.get('users', this.defaultConfig);
-    const sessionId = crypto.randomUUID();
+    const sessionId = crypto.randomBytes(16).toString('hex');
     
     const session: UserSession = {
-      id: sessionId,
-      userId: user._id,
+      id: new Types.ObjectId(sessionId),
+      userId: user.id,
       token: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + config.sessionTimeout),
-      lastActivity: new Date(),
-      ipAddress: credentials.ipAddress,
-      userAgent: credentials.userAgent,
+      lastUsed: new Date(),
       isActive: true,
+      ...(credentials.ipAddress ? { ipAddress: credentials.ipAddress } : {}),
+      ...(credentials.userAgent ? { userAgent: credentials.userAgent } : {}),
     };
 
     this.sessions.set(sessionId, session);

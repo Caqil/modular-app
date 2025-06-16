@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Post } from '../../../../../../packages/core/src/database/models/post';
 
 export async function GET(request: NextRequest) {
   try {

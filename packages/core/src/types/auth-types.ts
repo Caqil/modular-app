@@ -3,7 +3,7 @@
 // ===================================================================
 
 import type { Types } from 'mongoose';
-import type { UserRole, UserStatus } from '../types/user';
+import { UserRole, UserStatus } from '../types/user';
 
 export interface AuthConfig {
   jwt: {

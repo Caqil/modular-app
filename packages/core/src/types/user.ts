@@ -134,6 +134,9 @@ export interface LoginCredentials {
   password: string;
   rememberMe?: boolean;
   twoFactorCode?: string;
+  // Add these optional properties for security tracking
+  ipAddress?: string;
+  userAgent?: string;
 }
 
 export interface RegisterData {
@@ -154,6 +157,8 @@ export interface PasswordReset {
   token: string;
   password: string;
   confirmPassword: string;
+  ipAddress?: string;
+  userAgent?: string;
 }
 
 export interface EmailVerification {
@@ -214,12 +219,12 @@ export interface UserActivity {
 }
 
 export interface UserSession {
-  _id: Types.ObjectId;
+  id: Types.ObjectId;
   userId: Types.ObjectId;
   token: string;
   refreshToken?: string;
-  ipAddress: string;
-  userAgent: string;
+  ipAddress?: string;
+  userAgent?: string;
   createdAt: Date;
   expiresAt: Date;
   lastUsed: Date;

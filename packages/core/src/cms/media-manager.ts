@@ -227,11 +227,11 @@ export class MediaManager {
         mimeType: fileInfo.mimeType,
         size: fileInfo.size,
         uploadedBy,
-        alt: options.alt,
-        caption: options.caption,
-        description: options.description,
         isPublic: options.isPublic ?? true,
         tags: options.tags || [],
+        ...(options.alt !== undefined ? { alt: options.alt } : {}),
+        ...(options.caption !== undefined ? { caption: options.caption } : {}),
+        ...(options.description !== undefined ? { description: options.description } : {}),
       };
 
       const media = await this.mediaRepo.create(mediaData);
@@ -297,7 +297,12 @@ export class MediaManager {
       for (const file of files) {
         try {
           const fileData = 'buffer' in file ? file.buffer : file;
-          const originalName = 'originalname' in file ? file.originalname : file.originalname;
+          const originalName =
+            'originalname' in file
+              ? file.originalname
+              : 'originalName' in file
+                ? (file as Express.Multer.File).originalname
+                : '';
 
           const uploadResult = await this.uploadFile(fileData, originalName, uploadedBy, options);
           
@@ -328,44 +333,43 @@ export class MediaManager {
   // ===================================================================
   // MEDIA OPERATIONS
   // ===================================================================
-
-  /**
-   * Get media files with filtering and pagination
-   */
-  public async getMedia(query: MediaQuery = {}): Promise<PaginatedResult<IMedia>> {
-    try {
-      const cacheKey = `media:${JSON.stringify(query)}`;
-      
-      // Check cache first
-      const config = await this.config.get('media', this.defaultConfig);
-      if (config.cacheEnabled) {
-        const cached = await this.cache.get<PaginatedResult<IMedia>>(cacheKey);
-        if (cached) {
-          return cached;
-        }
+/**
+ * Get media files with filtering and pagination
+ */
+public async getMedia(query: MediaQuery = {}): Promise<PaginatedResult<IMedia>> {
+  try {
+    const cacheKey = `media:${JSON.stringify(query)}`;
+    
+    // Check cache first
+    const config = await this.config.get('media', this.defaultConfig);
+    if (config.cacheEnabled) {
+      const cached = await this.cache.get<PaginatedResult<IMedia>>(cacheKey);
+      if (cached) {
+        return cached;
       }
-
-      // Get media with pagination
-      const result = await this.mediaRepo.searchMedia(query);
-
-      // Apply filter hook
-      const filteredResult = await this.hooks.applyFilters(
-        CoreFilters.DATABASE_RESULTS,
-        result
-      );
-
-      // Cache result
-      if (config.cacheEnabled) {
-        await this.cache.set(cacheKey, filteredResult, config.cacheTTL);
-      }
-
-      return filteredResult;
-
-    } catch (error) {
-      this.logger.error('Error getting media:', error);
-      throw error;
     }
+
+    // Fix: Use findMediaWithFilters instead of searchMedia
+    const result = await this.mediaRepo.findMediaWithFilters(query);
+
+    // Apply filter hook
+    const filteredResult = await this.hooks.applyFilters(
+      CoreFilters.DATABASE_RESULTS,
+      result
+    );
+
+    // Cache result
+    if (config.cacheEnabled) {
+      await this.cache.set(cacheKey, filteredResult, config.cacheTTL);
+    }
+
+    return filteredResult;
+
+  } catch (error) {
+    this.logger.error('Error getting media:', error);
+    throw error;
   }
+}
 
   /**
    * Get media by ID
@@ -606,51 +610,36 @@ export class MediaManager {
   // ===================================================================
   // STATISTICS
   // ===================================================================
-
-  /**
-   * Get media statistics
-   */
-  public async getStats(): Promise<MediaStats> {
-    try {
-      const cacheKey = 'media:stats';
-      const config = await this.config.get('media', this.defaultConfig);
-      
-      // Check cache first
-      if (config.cacheEnabled) {
-        const cached = await this.cache.get<MediaStats>(cacheKey);
-        if (cached) {
-          return cached;
-        }
+/**
+ * Get media statistics
+ */
+public async getStats(): Promise<MediaStats> {
+  try {
+    const cacheKey = 'media:stats';
+    const config = await this.config.get('media', this.defaultConfig);
+    
+    // Check cache first
+    if (config.cacheEnabled) {
+      const cached = await this.cache.get<MediaStats>(cacheKey);
+      if (cached) {
+        return cached;
       }
-
-      const stats = await this.mediaRepo.getStats();
-
-      // Ensure all required MediaStats properties are present
-      const fullStats: MediaStats = {
-        total: stats.total ?? 0,
-        createdToday: stats.createdToday ?? 0,
-        createdThisWeek: stats.createdThisWeek ?? 0,
-        createdThisMonth: stats.createdThisMonth ?? 0,
-        totalSize: stats.totalSize ?? 0,
-        averageSize: stats.averageSize ?? 0,
-        totalDownloads: stats.totalDownloads ?? 0,
-        byType: stats.byType ?? {},
-        byUser: stats.byUser ?? {},
-        byTag: stats.byTag ?? {},
-      };
-
-      // Cache stats
-      if (config.cacheEnabled) {
-        await this.cache.set(cacheKey, fullStats, 300); // 5 minutes
-      }
-
-      return fullStats;
-
-    } catch (error) {
-      this.logger.error('Error getting media stats:', error);
-      throw error;
     }
+
+    const stats = await this.mediaRepo.getMediaStats();
+
+    // Cache stats
+    if (config.cacheEnabled) {
+      await this.cache.set(cacheKey, stats, 300); // 5 minutes
+    }
+
+    return stats;
+
+  } catch (error) {
+    this.logger.error('Error getting media stats:', error);
+    throw error;
   }
+}
 
   // ===================================================================
   // PRIVATE HELPER METHODS
@@ -681,7 +670,7 @@ export class MediaManager {
   ): Promise<void> {
     const fileSize = Buffer.isBuffer(file) ? file.length : file.size;
     const mimeType = Buffer.isBuffer(file) ? 
-      this.fileHandler.getMimeType(originalName) : 
+      FileHandler.getMimeType(originalName) : 
       file.mimetype;
 
     // Check file size
@@ -742,7 +731,7 @@ export class MediaManager {
       originalName: sanitizedName,
       path: uploadPath,
       url: this.getFileUrl(uploadPath),
-      mimeType: this.fileHandler.getMimeType(sanitizedName),
+      mimeType: FileHandler.getMimeType(sanitizedName),
       size: stats.size,
       checksum: hash,
     };

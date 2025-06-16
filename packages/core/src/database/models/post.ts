@@ -531,7 +531,7 @@ PostSchema.pre('save', async function(next) {
 
     // Clear publishedAt if status is not published
     if (this.isModified('status') && this.status !== ContentStatus.PUBLISHED) {
-      this.publishedAt = undefined;
+      this.publishedAt = undefined as any;
     }
 
     // Generate excerpt if not provided
@@ -573,7 +573,7 @@ PostSchema.post('save', async function(doc) {
   if (doc.scheduledAt && doc.scheduledAt <= new Date() && doc.status === ContentStatus.DRAFT) {
     doc.status = ContentStatus.PUBLISHED;
     doc.publishedAt = new Date();
-    doc.scheduledAt = undefined;
+    doc.scheduledAt = undefined as any;
     await doc.save();
   }
 });

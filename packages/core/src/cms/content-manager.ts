@@ -419,13 +419,14 @@ export class ContentManager {
    */
   public async createCategory(categoryData: Partial<ICategory>): Promise<ICategory> {
     try {
-      const sanitizedData = {
+      const sanitizedData: Partial<ICategory> = {
         ...categoryData,
         name: Sanitizer.sanitizeText(categoryData.name || ''),
         slug: categoryData.slug || Sanitizer.sanitizeSlug(categoryData.name || ''),
-        description: categoryData.description ? 
-          Sanitizer.sanitizeHtml(categoryData.description) : undefined,
       };
+      if (categoryData.description) {
+        sanitizedData.description = Sanitizer.sanitizeHtml(categoryData.description);
+      }
 
       const category = await this.categoryRepo.create(sanitizedData);
       await this.clearContentCache('categories');
@@ -448,13 +449,14 @@ export class ContentManager {
    */
   public async createTag(tagData: Partial<ITag>): Promise<ITag> {
     try {
-      const sanitizedData = {
+      const sanitizedData: Partial<ITag> = {
         ...tagData,
         name: Sanitizer.sanitizeText(tagData.name || ''),
         slug: tagData.slug || Sanitizer.sanitizeSlug(tagData.name || ''),
-        description: tagData.description ? 
-          Sanitizer.sanitizeHtml(tagData.description) : undefined,
       };
+      if (tagData.description) {
+        sanitizedData.description = Sanitizer.sanitizeHtml(tagData.description);
+      }
 
       const tag = await this.tagRepo.create(sanitizedData);
       await this.clearContentCache('tags');
@@ -494,7 +496,7 @@ export class ContentManager {
         'author.email': Sanitizer.sanitizeEmail(commentData.author?.email || ''),
         'author.website': commentData.author?.website ? 
           Sanitizer.sanitizeUrl(commentData.author.website) : undefined,
-        status: config.moderateComments ? 'pending' : 'approved',
+        status: config.moderateComments ? 'pending' as 'pending' : 'approved' as 'approved',
       };
 
       const comment = await this.commentRepo.create(sanitizedData);
@@ -565,50 +567,67 @@ export class ContentManager {
   // STATISTICS
   // ===================================================================
 
-  /**
-   * Get content statistics
-   */
-  public async getStats(): Promise<ContentStats> {
-    try {
-      const cacheKey = 'content:stats';
-      
-      // Check cache first
-      if (this.defaultConfig.cacheEnabled) {
-        const cached = await this.cache.get<ContentStats>(cacheKey);
-        if (cached) {
-          return cached;
-        }
+  
+/**
+ * Get content statistics
+ */
+public async getStats(): Promise<ContentStats> {
+  try {
+    const cacheKey = 'content:stats';
+    
+    // Check cache first
+    if (this.defaultConfig.cacheEnabled) {
+      const cached = await this.cache.get<ContentStats>(cacheKey);
+      if (cached) {
+        return cached;
       }
-
-      const [postStats, pageStats, categoryCount, tagCount, commentStats] = await Promise.all([
-        this.postRepo.getStats(),
-        this.pageRepo.getStats(),
-        this.categoryRepo.count(),
-        this.tagRepo.count(),
-        this.commentRepo.getStats(),
-      ]);
-
-      const stats: ContentStats = {
-        posts: postStats,
-        pages: pageStats,
-        categories: categoryCount,
-        tags: tagCount,
-        comments: commentStats,
-        recentActivity: [], // Would be populated from activity log
-      };
-
-      // Cache stats
-      if (this.defaultConfig.cacheEnabled) {
-        await this.cache.set(cacheKey, stats, 300); // 5 minutes
-      }
-
-      return stats;
-
-    } catch (error) {
-      this.logger.error('Error getting content stats:', error);
-      throw error;
     }
+
+    // Call the correct repository methods
+    const [postStats, pageStats, categoryCount, tagCount, commentStats] = await Promise.all([
+      this.postRepo.getPostStats(),    // Fix: Use getPostStats instead of getStats
+      this.pageRepo.getPageStats(),    // Fix: Use getPageStats instead of getStats
+      this.categoryRepo.count(),
+      this.tagRepo.count(),
+      this.commentRepo.getCommentStats(), // Fix: Use getCommentStats instead of getStats
+    ]);
+
+    // The repository methods now return the correct structure that matches ContentStats
+    const stats: ContentStats = {
+      posts: {
+        total: postStats.total,
+        published: postStats.published,
+        draft: postStats.draft,
+        pending: postStats.pending,
+      },
+      pages: {
+        total: pageStats.total,
+        published: pageStats.published,
+        draft: pageStats.draft,
+      },
+      categories: categoryCount,
+      tags: tagCount,
+      comments: {
+        total: commentStats.total,
+        approved: commentStats.approved,
+        pending: commentStats.pending,
+        spam: commentStats.spam,
+      },
+      recentActivity: [], // Would be populated from activity log
+    };
+
+    // Cache stats
+    if (this.defaultConfig.cacheEnabled) {
+      await this.cache.set(cacheKey, stats, 300); // 5 minutes
+    }
+
+    return stats;
+
+  } catch (error) {
+    this.logger.error('Error getting content stats:', error);
+    throw error;
   }
+}
 
   // ===================================================================
   // PRIVATE HELPER METHODS

@@ -13,7 +13,11 @@ export { Comment, type IComment } from './taxonomy';
 export { Plugin, type IPlugin } from './plugin';
 export { Theme, type ITheme } from './theme';
 export { Setting, type ISetting } from './setting';
-
+import { SettingsRepository } from '../repositories/settings-repository';
+import { UserRepository } from '../repositories/user-repository';
+import { CategoryRepository, PageRepository } from '../repositories/content-repository';
+import { UserRole } from '../../types/user';
+import { ContentStatus } from '../../types/content';
 
 // Model collection names for reference
 export const MODEL_NAMES = {
@@ -99,12 +103,12 @@ export async function initializeDefaultData(): Promise<void> {
     console.log('Initializing default data...');
 
     // Initialize default settings
-    const settingRepo = getSettingRepository();
+    const settingRepo = new SettingsRepository();
     await settingRepo.initializeDefaults();
 
     // Create default admin user if none exists
-    const userRepo = getUserRepository();
-    const adminExists = await userRepo.findByRole('super_admin');
+    const userRepo = new UserRepository();
+    const adminExists = await userRepo.findByRole(UserRole.SUPER_ADMIN);
     
     if (adminExists.length === 0) {
       await userRepo.create({
@@ -125,8 +129,8 @@ export async function initializeDefaultData(): Promise<void> {
     }
 
     // Create default categories
-    const categoryRepo = getCategoryRepository();
-    const categoriesExist = await categoryRepo.findTopLevel();
+    const categoryRepo = new CategoryRepository();
+    const categoriesExist = await categoryRepo.findMany({ parentId: null }); // Fix: use findMany with parentId filter
     
     if (categoriesExist.length === 0) {
       const defaultCategories = [
@@ -143,18 +147,17 @@ export async function initializeDefaultData(): Promise<void> {
     }
 
     // Create default homepage
-    const pageRepo = getPageRepository();
-    const homepage = await pageRepo.findHomepage();
+    const pageRepo = new PageRepository();
+    const homepage = await pageRepo.getHomepage(); // Fix: use getHomepage() method
     
     if (!homepage) {
-      const adminUser = await userRepo.findByRole('super_admin');
+      const adminUser = await userRepo.findByRole(UserRole.SUPER_ADMIN);
       if (adminUser.length > 0) {
         await pageRepo.create({
           title: 'Welcome to Modular App',
           slug: 'home',
-          content: '<h1>Welcome to Modular App</h1><p>This is your new CMS built with modern technologies.</p>',
-          status: 'published',
-          author: adminUser[0]._id,
+          status: ContentStatus.PUBLISHED,
+          author: adminUser[0]?.id,
           meta: {
             isHomepage: true,
             showInMenu: true,
@@ -199,7 +202,7 @@ export async function checkModelHealth() {
       modelsRegistered: Object.keys(MODELS).length,
       collections: Object.values(COLLECTION_NAMES),
       timestamp: new Date(),
-      status: 'healthy' as const,
+      status: 'healthy' as 'healthy' | 'unhealthy',
       details: {} as Record<string, any>,
     };
 
