@@ -1,11 +1,9 @@
 "use client";
 
 import React from "react";
-import { IPost } from "@modular-app/core/database/models";
 import { useThemeSettings } from "../hooks/use-theme-settings";
-import Header from "../components/header";
-import Footer from "../components/footer";
-import SearchForm from "../components/search-form";
+import { Footer, Header, SearchForm } from "..";
+import { IPost } from "@modular-app/core";
 
 interface NotFoundTemplateProps {
   suggestedPosts?: IPost[];
@@ -92,7 +90,7 @@ export default function NotFoundTemplate({
               <h2 className="text-xl font-semibold mb-6">You Might Like</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {suggestedPosts.slice(0, 4).map((post) => (
-                  <SuggestedPostCard key={post._id.toString()} post={post} />
+                  <SuggestedPostCard key={post.slug.toString()} post={post} />
                 ))}
               </div>
             </div>

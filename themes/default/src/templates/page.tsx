@@ -2,8 +2,8 @@
 
 import React from 'react';
 import { useThemeSettings } from '../hooks/use-theme-settings';
-import { Header, ThemeHelpers } from '..';
-import { IPage } from '@modular-app/core/database/models';
+import { ContentArea, Footer, Header, PageSingle, Sidebar, ThemeHelpers } from '..';
+import { IPage } from '@modular-app/core';
 
 interface PageTemplateProps {
   page: IPage;
@@ -83,7 +83,7 @@ function ChildPages({ pages }: ChildPagesProps) {
       <h3 className="text-2xl font-bold mb-6">Subpages</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {pages.map((page) => (
-          <article key={page._id.toString()} className="group border border-border rounded-lg p-6 hover:shadow-md transition-shadow">
+          <article key={page.slug.toString()} className="group border border-border rounded-lg p-6 hover:shadow-md transition-shadow">
             <h4 className="font-semibold mb-2">
               <a
                 href={ThemeHelpers.getPageUrl(page)}

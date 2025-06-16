@@ -419,7 +419,7 @@ PostSchema.methods.addTag = function(tag: string) {
 };
 
 PostSchema.methods.removeTag = function(tag: string) {
-  this.tags = this.tags.filter(t => t !== tag.toLowerCase().trim());
+  this.tags = this.tags.filter((t: string) => t !== tag.toLowerCase().trim());
   return this;
 };
 

@@ -3,7 +3,7 @@
 import React from "react";
 import { Calendar, User, Edit } from "lucide-react";
 import { ThemeHelpers } from "../..";
-import { IPage } from '@modular-app/core/database/models';
+import { IPage } from "@modular-app/core";
 
 interface PageSingleProps {
   page: IPage;

@@ -1,13 +1,9 @@
 "use client";
 
 import React from "react";
-import { IPost } from "@modular-app/core/database/models";
 import { useThemeSettings } from "../hooks/use-theme-settings";
-import Header from "../components/header";
-import Footer from "../components/footer";
-import Sidebar from "../components/sidebar";
-import PostList from "../components/post-list";
-import ContentArea from "../components/content-area";
+import { IPost } from "@modular-app/core";
+import { ContentArea, Footer, Header, PostList, Sidebar } from "..";
 
 interface HomePageProps {
   posts: IPost[];
@@ -46,7 +42,7 @@ export default function HomePage({
               <div className="space-y-6">
                 {featuredPosts.slice(1, 3).map((post) => (
                   <FeaturedPostCard
-                    key={post._id.toString()}
+                    key={post.slug.toString()}
                     post={post}
                     size="small"
                   />

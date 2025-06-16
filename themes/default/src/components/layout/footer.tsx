@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { useThemeSettings } from "../hooks/use-theme-settings";
 import { Heart } from "lucide-react";
+import { useThemeSettings } from "../..";
 
 export default function Footer() {
   const { settings } = useThemeSettings();

@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ITag } from "@modular-app/core/database/models";
-import ThemeHelpers from "../theme-helpers";
 import { Tag, Hash } from "lucide-react";
+import { ITag } from "@modular-app/core";
+import { ThemeHelpers } from "../..";
 
 interface TagsProps {
   showCounts?: boolean;

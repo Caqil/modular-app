@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ICategory } from "@modular-app/core/database/models";
-import ThemeHelpers from "../theme-helpers";
-import { Folder, ChevronRight } from "lucide-react";
+import { ICategory } from "@modular-app/core";
+import { ThemeHelpers } from "../..";
+import { ChevronRight, Folder } from "lucide-react";
 
 interface CategoriesProps {
   showCounts?: boolean;
@@ -192,7 +192,7 @@ function organizeHierarchy(categories: ICategory[]): CategoryNode[] {
 
   // Organize into hierarchy
   categories.forEach((category) => {
-    const categoryNode = categoryMap.get(category._id.toString())!;
+    const categoryNode = categoryMap.get(category.slug.toString())!;
 
     if (category.parentId) {
       const parent = categoryMap.get(category.parentId.toString());

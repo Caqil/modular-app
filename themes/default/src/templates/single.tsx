@@ -1,15 +1,9 @@
 "use client";
 
 import React from "react";
-import { IPost, IComment } from "@modular-app/core/database/models";
 import { useThemeSettings } from "../hooks/use-theme-settings";
-import Header from "../components/header";
-import Footer from "../components/footer";
-import Sidebar from "../components/sidebar";
-import PostSingle from "../components/post-single";
-import CommentForm from "../components/comment-form";
-import ContentArea from "../components/content-area";
-import ThemeHelpers from "../theme-helpers";
+import { CommentForm, Footer, Header, PostSingle, Sidebar, ThemeHelpers } from "..";
+import { IComment, IPost } from "@modular-app/core";
 
 interface SingleTemplateProps {
   post: IPost;
@@ -211,7 +205,7 @@ function RelatedPosts({ posts }: RelatedPostsProps) {
       <h3 className="text-2xl font-bold mb-6">Related Posts</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {posts.map((post) => (
-          <article key={post._id.toString()} className="group">
+          <article key={post.slug.toString()} className="group">
             {post.featuredImage && (
               <div className="aspect-video mb-3 overflow-hidden rounded-lg">
                 <img
@@ -256,13 +250,13 @@ function CommentSection({ post, comments }: CommentSectionProps) {
       {comments.length > 0 && (
         <div className="mb-8 space-y-6">
           {comments.map((comment) => (
-            <CommentItem key={comment._id.toString()} comment={comment} />
+            <CommentItem key={comment.postId.toString()} comment={comment} />
           ))}
         </div>
       )}
 
       {/* Comment Form */}
-      <CommentForm postId={post._id.toString()} />
+      <CommentForm postId={post.slug.toString()} />
     </div>
   );
 }

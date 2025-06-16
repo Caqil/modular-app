@@ -65,7 +65,7 @@ export class CMSManager implements CMSInstance {
   private _startTime = new Date();
   private _errors: CMSError[] = [];
   private _stats: CMSStats | null = null;
-  private _healthCheckInterval?: NodeJS.Timer;
+  private _healthCheckInterval?: ReturnType<typeof setInterval>;
 
   private readonly defaultConfig: CMSManagerConfig = {
     autoStart: true,

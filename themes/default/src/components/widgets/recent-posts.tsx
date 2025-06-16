@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { IPost } from "@modular-app/core/database/models";
-import ThemeHelpers from "../theme-helpers";
 import { Calendar, Clock } from "lucide-react";
+import { IPost } from "@modular-app/core";
 
 interface RecentPostsProps {
   count?: number;

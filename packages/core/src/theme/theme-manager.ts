@@ -1,4 +1,4 @@
-import * as fs from 'fs/promises';
+
 import path from 'path';
 import { Model } from 'mongoose';
 import { Logger } from '../utils/logger';
@@ -15,6 +15,7 @@ import {
   ThemeSettings 
 } from './theme-types';
 import ConfigManager from '../config/config-manager';
+import fs from 'fs-extra';
 
 export interface ThemeManagerConfig {
   themesDirectory: string;

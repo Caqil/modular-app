@@ -75,7 +75,7 @@ export class ContentManager {
   private tagRepo = new TagRepository();
   private commentRepo = new CommentRepository();
   private initialized = false;
-  private autoSaveTimers = new Map<string, NodeJS.Timer>();
+  private autoSaveTimers = new Map<string, NodeJS.Timeout>();
 
   private readonly defaultConfig: ContentManagerConfig = {
     cacheEnabled: true,

@@ -1,6 +1,4 @@
-
-import { IPost, IPage, ICategory, ITag, IComment } from '@modular-app/core/database/models';
-import { ContentStatus } from '@modular-app/core/types/content';
+import { IPost, IPage, ICategory, ITag, IComment, ContentStatus } from '@modular-app/core';
 import { format, formatDistanceToNow } from 'date-fns';
 
 export interface ThemeHelpersInterface {
@@ -68,7 +66,7 @@ class ThemeHelpers implements ThemeHelpersInterface {
   }
 
   /**
-   * Generate URL-friendly slug
+   * Generate URL-friendly slug from title
    */
   generateSlug(title: string): string {
     return title
@@ -84,8 +82,7 @@ class ThemeHelpers implements ThemeHelpersInterface {
    */
   getReadingTime(content: string): number {
     const wordsPerMinute = 200;
-    const plainText = this.stripHtml(content);
-    const wordCount = plainText.trim().split(/\s+/).length;
+    const wordCount = this.stripHtml(content).split(/\s+/).length;
     return Math.ceil(wordCount / wordsPerMinute);
   }
 
@@ -93,7 +90,6 @@ class ThemeHelpers implements ThemeHelpersInterface {
    * Format reading time for display
    */
   formatReadingTime(minutes: number): string {
-    if (minutes < 1) return 'Less than 1 min read';
     if (minutes === 1) return '1 min read';
     return `${minutes} min read`;
   }
@@ -109,7 +105,10 @@ class ThemeHelpers implements ThemeHelpersInterface {
    * Generate post URL
    */
   getPostUrl(post: IPost): string {
-    return `/posts/${post.slug}`;
+    const date = new Date(post.publishedAt || post.createdAt);
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    return `/blog/${year}/${month}/${post.slug}`;
   }
 
   /**
@@ -123,21 +122,21 @@ class ThemeHelpers implements ThemeHelpersInterface {
    * Generate category URL
    */
   getCategoryUrl(category: ICategory): string {
-    return `/category/${category.slug}`;
+    return `/categories/${category.slug}`;
   }
 
   /**
    * Generate tag URL
    */
   getTagUrl(tag: ITag): string {
-    return `/tag/${tag.slug}`;
+    return `/tags/${tag.slug}`;
   }
 
   /**
    * Generate author URL
    */
   getAuthorUrl(authorId: string): string {
-    return `/author/${authorId}`;
+    return `/authors/${authorId}`;
   }
 
   /**
@@ -161,35 +160,42 @@ class ThemeHelpers implements ThemeHelpersInterface {
   }
 
   /**
-   * Sanitize class name
+   * Sanitize class name for CSS
    */
   sanitizeClassName(input: string): string {
     return input
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-_]/g, '')
-      .replace(/\s+/g, '-')
+      .replace(/[^a-zA-Z0-9_-]/g, '-')
+      .replace(/^[0-9]/, 'n$&')
+      .replace(/--+/g, '-')
       .replace(/^-+|-+$/g, '');
   }
 
   /**
-   * Truncate text by word count
+   * Truncate text to specified word count
    */
   truncateWords(text: string, wordCount: number): string {
-    const words = text.trim().split(/\s+/);
+    const words = text.split(/\s+/);
     if (words.length <= wordCount) return text;
     return words.slice(0, wordCount).join(' ') + '...';
   }
 
   /**
-   * Generate meta description
+   * Generate meta description from content
    */
   getMetaDescription(content: string, fallback: string = ''): string {
-    const excerpt = this.getExcerpt(content, 160);
-    return excerpt || fallback;
+    const plainText = this.stripHtml(content);
+    if (plainText.length <= 160) return plainText;
+    
+    const truncated = plainText.substring(0, 160);
+    const lastSpaceIndex = truncated.lastIndexOf(' ');
+    
+    return lastSpaceIndex > 0 
+      ? truncated.substring(0, lastSpaceIndex) + '...'
+      : fallback;
   }
 
   /**
-   * Format comments count
+   * Format comments count for display
    */
   formatCommentsCount(count: number): string {
     if (count === 0) return 'No comments';
@@ -218,36 +224,29 @@ class ThemeHelpers implements ThemeHelpersInterface {
   }
 
   /**
-   * Generate breadcrumbs
+   * Generate breadcrumb navigation
    */
   generateBreadcrumbs(currentPage: any): Array<{ title: string; url?: string }> {
-    const breadcrumbs = [
-      { title: 'Home', url: '/' }
-    ];
-
+    const breadcrumbs = [{ title: 'Home', url: '/' }];
+    
+    // Add logic based on page type
     if (currentPage.type === 'post') {
       breadcrumbs.push({ title: 'Blog', url: '/blog' });
-      if (currentPage.categories?.[0]) {
-        breadcrumbs.push({
-          title: currentPage.categories[0].name,
-          url: this.getCategoryUrl(currentPage.categories[0])
+      if (currentPage.category) {
+        breadcrumbs.push({ 
+          title: currentPage.category.name, 
+          url: this.getCategoryUrl(currentPage.category) 
         });
       }
-      breadcrumbs.push({ title: currentPage.title });
-    } else if (currentPage.type === 'page') {
-      if (currentPage.parentId) {
-        // Add parent pages
-        breadcrumbs.push({ title: 'Parent Page', url: '/parent' });
-      }
-      breadcrumbs.push({ title: currentPage.title });
-    } else if (currentPage.type === 'category') {
-      breadcrumbs.push({ title: 'Categories', url: '/categories' });
-      breadcrumbs.push({ title: currentPage.name });
-    } else if (currentPage.type === 'tag') {
-      breadcrumbs.push({ title: 'Tags', url: '/tags' });
-      breadcrumbs.push({ title: currentPage.name });
+    } else if (currentPage.type === 'page' && currentPage.parent) {
+      // Add parent pages for hierarchical pages
+      breadcrumbs.push({ 
+        title: currentPage.parent.title, 
+        url: this.getPageUrl(currentPage.parent) 
+      });
     }
-
+    
+    breadcrumbs.push({ title: currentPage.title, url: currentPage.url || undefined });
     return breadcrumbs;
   }
 
@@ -261,14 +260,19 @@ class ThemeHelpers implements ThemeHelpersInterface {
   }
 
   /**
-   * Optimize image URL with parameters
+   * Generate optimized image URL
    */
-  optimizeImageUrl(imageUrl: string, width?: number, height?: number, quality: number = 80): string {
-    const url = new URL(imageUrl, window.location.origin);
+  optimizeImageUrl(
+    imageUrl: string, 
+    width?: number, 
+    height?: number, 
+    quality: number = 80
+  ): string {
+    const url = new URL(imageUrl, window?.location?.origin || 'http://localhost:3000');
     
     if (width) url.searchParams.set('w', width.toString());
     if (height) url.searchParams.set('h', height.toString());
-    if (quality !== 80) url.searchParams.set('q', quality.toString());
+    url.searchParams.set('q', quality.toString());
     
     return url.toString();
   }

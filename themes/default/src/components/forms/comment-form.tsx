@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useThemeSettings } from "../hooks/use-theme-settings";
-import ThemeHelpers from "../theme-helpers";
+import { ThemeHelpers, useThemeSettings } from "../..";
 
 interface CommentFormProps {
   postId: string;

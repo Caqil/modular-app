@@ -1,8 +1,6 @@
 "use client";
 
 import React from "react";
-import { IPost } from "@modular-app/core/database/models";
-import ThemeHelpers from "../theme-helpers";
 import {
   Calendar,
   Clock,
@@ -12,6 +10,8 @@ import {
   Tag,
   Folder,
 } from "lucide-react";
+import { IPost } from "@modular-app/core";
+import { ThemeHelpers } from "../..";
 
 interface PostListProps {
   posts: IPost[];

@@ -1,10 +1,11 @@
-import * as fs from 'fs/promises';
+
 import path from 'path';
 import { createClient, RedisClientType } from 'redis';
 import { Document, Model, Schema, model } from 'mongoose';
 import { EventEmitter } from './event-emitter';
 import { Logger } from '../utils/logger';
 import { ConfigManager } from '../config/config-manager';
+import fs from 'fs-extra';
 import {
   Event,
   EventCallback,

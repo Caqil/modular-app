@@ -1,4 +1,5 @@
-import { ThemeCustomizer, ThemeCustomizerSection } from '@modular-app/core/types/theme';
+import { ThemeCustomizer } from "@modular-app/core";
+
 
 export interface CustomizerConfig extends ThemeCustomizer {
   panels?: Array<{

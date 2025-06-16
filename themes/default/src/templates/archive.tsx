@@ -1,14 +1,9 @@
 "use client";
 
 import React from "react";
-import { IPost, ICategory, ITag } from "@modular-app/core/database/models";
 import { useThemeSettings } from "../hooks/use-theme-settings";
-import Header from "../components/header";
-import Footer from "../components/footer";
-import Sidebar from "../components/sidebar";
-import PostList from "../components/post-list";
-import ContentArea from "../components/content-area";
-
+import { ContentArea, Footer, Header, PostList, Sidebar } from "..";
+import { ICategory, IPost, ITag } from "@modular-app/core";
 interface ArchiveTemplateProps {
   posts: IPost[];
   archiveType: "category" | "tag" | "date" | "author";

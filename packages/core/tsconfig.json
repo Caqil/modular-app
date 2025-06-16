@@ -4,6 +4,7 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "baseUrl": ".",
+    "noImplicitAny": false,
     "paths": {
       "@modular-app/config": ["../config/src"],
       "@modular-app/config/*": ["../config/src/*"]

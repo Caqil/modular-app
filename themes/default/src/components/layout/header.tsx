@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useThemeSettings } from "../hooks/use-theme-settings";
 import Navigation from "./navigation";
-import SearchForm from "./search-form";
 import { Menu, X, Search } from "lucide-react";
+import { SearchForm, useThemeSettings } from "../..";
 
 export default function Header() {
   const { settings } = useThemeSettings();

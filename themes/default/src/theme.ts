@@ -1,7 +1,7 @@
-import { Theme, ThemeManifest, ThemeSupport, ThemeStatus } from '@modular-app/core/types/theme';
-import { Logger } from '@modular-app/core/utils/logger';
-import { HookManager } from '@modular-app/core/hooks/hook-manager';
-import { EventManager } from '@modular-app/core/events/event-manager';
+import { Theme } from '@emotion/react';
+import { EventManager, HookManager, Logger, ThemeManifest, ThemeStatus, ThemeSupport } from '@modular-app/core';
+
+
 
 export class DefaultTheme implements Theme {
   public manifest: ThemeManifest;

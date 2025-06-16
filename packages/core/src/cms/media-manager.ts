@@ -14,7 +14,7 @@ import { CoreHooks, CoreFilters } from '../hooks/hook-types';
 import { PaginatedResult } from '../types/database';
 import { MediaRepository, type MediaQuery, type MediaStats, type UploadOptions } from '../database/repositories/media-repository';
 import { type IMedia } from '../database/models';
-import * as fs from 'fs/promises';
+import fs from 'fs-extra';
 
 export interface MediaManagerConfig {
   uploadDirectory: string;

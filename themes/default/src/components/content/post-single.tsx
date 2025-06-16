@@ -1,9 +1,6 @@
 "use client";
 
 import React from "react";
-import { IPost } from "@modular-app/core/database/models";
-import { useThemeSettings } from "../hooks/use-theme-settings";
-import ThemeHelpers from "../theme-helpers";
 import {
   Calendar,
   Clock,
@@ -14,6 +11,9 @@ import {
   Heart,
   Bookmark,
 } from "lucide-react";
+import { IPost } from "@modular-app/core";
+import { useThemeSettings } from "../../hooks/use-theme-settings";
+import { ThemeHelpers } from "../..";
 
 interface PostSingleProps {
   post: IPost;

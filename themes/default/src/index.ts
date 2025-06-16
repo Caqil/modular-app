@@ -4,7 +4,7 @@ export { useThemeSettings } from './hooks/use-theme-settings';
 export { useCustomization } from './hooks/use-customization';
 
 // Component exports
-export { default as Header } from './components/header';
+export { default as Header } from './he';
 export { default as Footer } from './components/footer';
 export { default as Navigation } from './components/navigation';
 export { default as Sidebar } from './components/sidebar';
@@ -13,7 +13,7 @@ export { default as CommentForm } from './components/comment-form';
 export { default as PostSingle } from './components/post-single';
 export { default as PostList } from './components/post-list';
 export { default as PageSingle } from './components/page-single';
-export { default as ContentArea } from './components/content-area';
+export { default as ContentArea } from './content-area';
 
 // Widget exports
 export { default as RecentPosts } from './widgets/recent-posts';

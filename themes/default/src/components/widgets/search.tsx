@@ -1,14 +1,8 @@
 "use client";
 
+import { IPost } from "@modular-app/core";
 import React, { useState } from "react";
-import { IPost } from "@modular-app/core/database/models";
-import { useThemeSettings } from "../hooks/use-theme-settings";
-import Header from "../components/header";
-import Footer from "../components/footer";
-import Sidebar from "../components/sidebar";
-import PostList from "../components/post-list";
-import SearchForm from "../components/search-form";
-import ContentArea from "../components/content-area";
+import { ContentArea, Footer, Header, PostList, SearchForm, Sidebar, useThemeSettings } from "../..";
 
 interface SearchTemplateProps {
   posts: IPost[];

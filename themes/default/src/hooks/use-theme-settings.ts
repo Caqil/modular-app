@@ -1,6 +1,5 @@
+import { ThemeSettings } from '@modular-app/core';
 import { useState, useEffect } from 'react';
-import { ThemeSettings } from '@modular-app/core/types/theme';
-import defaultSettings from '../customizer/default';
 
 interface UseThemeSettingsReturn {
   settings: ThemeSettings;
