@@ -1,4 +1,4 @@
-import fs from 'fs-extra';
+import * as fs from 'fs/promises';
 import path from 'path';
 import { createClient, RedisClientType } from 'redis';
 import { Document, Model, Schema, model } from 'mongoose';

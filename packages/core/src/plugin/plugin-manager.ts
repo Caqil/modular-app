@@ -1,4 +1,4 @@
-import fs from 'fs-extra';
+import * as fs from 'fs/promises';
 import path from 'path';
 import { Model } from 'mongoose';
 import { Logger } from '../utils/logger';

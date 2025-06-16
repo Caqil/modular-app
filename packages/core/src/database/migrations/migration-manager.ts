@@ -4,7 +4,7 @@ import { Logger } from '../../utils/logger';
 import { EventManager } from '../../events/event-manager';
 import { EventType } from '../../events/event-types';
 import { Migration } from '../../types/database';
-import { fs } from 'fs-extra';
+import * as fs from 'fs/promises';
 // Migration record interface for database storage
 export interface IMigrationRecord extends Document {
   version: string;
