@@ -2,7 +2,6 @@ import { Logger } from '../utils/logger';
 import { EventManager } from '../events/event-manager';
 import { ConfigManager } from '../config/config-manager';
 import { PluginManager } from '../plugin/plugin-manager';
-import { ThemeManager } from '../theme/theme-manager';
 import { HookManager } from '../hooks/hook-manager';
 import { DatabaseConnection } from '../database/connection';
 import { CacheManager } from '../cache/cache-manager';
@@ -22,7 +21,6 @@ import {
   Page, 
   Media, 
   Plugin, 
-  Theme, 
   Setting,
   initializeModels 
 } from '../database/models';
@@ -42,7 +40,6 @@ export interface CMSHealth {
   database: boolean;
   cache: boolean;
   plugins: number;
-  themes: number;
   errors: CMSError[];
   lastCheck: Date;
 }
@@ -56,7 +53,6 @@ export class CMSManager implements CMSInstance {
   private _events = EventManager.getInstance();
   private _config = ConfigManager.getInstance();
   private _plugins = PluginManager.getInstance();
-  private _themes = ThemeManager.getInstance();
   private _hooks = HookManager.getInstance();
   private _database = DatabaseConnection.getInstance();
   private _cache = CacheManager.getInstance();
@@ -87,7 +83,6 @@ export class CMSManager implements CMSInstance {
 
   // Getters for component access
   public get plugins(): PluginManager { return this._plugins; }
-  public get themes(): ThemeManager { return this._themes; }
   public get hooks(): HookManager { return this._hooks; }
   public get events(): EventManager { return this._events; }
   public get config(): ConfigManager { return this._config; }
@@ -142,9 +137,6 @@ export class CMSManager implements CMSInstance {
 
       // 6. Load and activate plugins
       await this.initializePlugins();
-
-      // 7. Load and activate theme
-      await this.initializeThemes();
 
       // 8. Start health monitoring
       await this.startHealthMonitoring();
@@ -208,7 +200,6 @@ export class CMSManager implements CMSInstance {
 
       // Shutdown components in reverse order
       await this._plugins.shutdown();
-      await this._themes.shutdown();
       await this._hooks.shutdown();
       await this._database.disconnect();
 
@@ -230,14 +221,12 @@ export class CMSManager implements CMSInstance {
   public async getStats(): Promise<CMSStats> {
     const memoryUsage = process.memoryUsage();
     const pluginStats = this._plugins.getStats();
-    const themeStats = this._themes.getStats();
     const cacheStats = await this._cache.getStats();
 
     this._stats = {
       uptime: this.getUptime(),
       requests: 0, // Would be tracked by middleware
       activePlugins: pluginStats.active,
-      activeTheme: String(themeStats.active || 'none'),
       memoryUsage,
       databaseConnections: 1, 
     };
@@ -252,7 +241,6 @@ export class CMSManager implements CMSInstance {
     const databaseHealthy = await this._database.healthCheck();
     const cacheHealthy = await this._cache.healthCheck();
     const pluginStats = this._plugins.getStats();
-    const themeStats = this._themes.getStats();
 
     return {
       status: this._status,
@@ -260,7 +248,6 @@ export class CMSManager implements CMSInstance {
       database: databaseHealthy,
       cache: !!cacheHealthy,
       plugins: pluginStats.total,
-      themes: themeStats.total,
       errors: this._errors.slice(-10), // Last 10 errors
       lastCheck: new Date(),
     };
@@ -368,14 +355,6 @@ private async initializePlugins(): Promise<void> {
   this.logger.debug('Plugins initialized');
 }
 
-/**
- * Initialize themes
- */
-private async initializeThemes(): Promise<void> {
-  this.logger.debug('Initializing themes...');
-  await this._themes.initialize(Theme as any);
-  this.logger.debug('Themes initialized');
-}
 
   /**
    * Start health monitoring

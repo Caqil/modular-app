@@ -1,1 +1,0 @@
-export default function popular-posts() { return <div>popular-posts</div> }

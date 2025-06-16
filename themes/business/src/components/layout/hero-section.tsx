@@ -1,1 +1,0 @@
-export default function hero-section() { return <div>hero-section</div> }

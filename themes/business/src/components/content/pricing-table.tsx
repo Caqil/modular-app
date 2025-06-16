@@ -1,1 +1,0 @@
-export default function pricing-table() { return <div>pricing-table</div> }

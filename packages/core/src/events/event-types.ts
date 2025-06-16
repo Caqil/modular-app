@@ -171,15 +171,6 @@ export enum EventType {
   PLUGIN_ERROR = 'plugin:error',
   PLUGIN_SETTINGS_CHANGED = 'plugin:settings_changed',
   
-  // Theme events
-  THEME_INSTALLED = 'theme:installed',
-  THEME_ACTIVATED = 'theme:activated',
-  THEME_DEACTIVATED = 'theme:deactivated',
-  THEME_UPDATED = 'theme:updated',
-  THEME_UNINSTALLED = 'theme:uninstalled',
-  THEME_CUSTOMIZED = 'theme:customized',
-  THEME_SETTINGS_CHANGED = 'theme:settings_changed',
-  
   // Settings events
   SETTING_CREATED = 'setting:created',
   SETTING_UPDATED = 'setting:updated',

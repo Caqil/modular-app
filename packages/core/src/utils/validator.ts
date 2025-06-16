@@ -109,21 +109,6 @@ export const pluginManifestSchema = z.object({
   capabilities: z.array(z.string()),
 });
 
-// Theme validation schemas
-export const themeManifestSchema = z.object({
-  name: z.string().min(1),
-  version: z.string().regex(/^\d+\.\d+\.\d+$/),
-  title: z.string().min(1),
-  description: z.string().min(1),
-  author: z.string().min(1),
-  license: z.string().min(1),
-  supports: z.array(z.string()),
-  requirements: z.object({
-    cmsVersion: z.string(),
-    nodeVersion: z.string(),
-  }),
-});
-
 // Query validation schemas
 export const paginationSchema = z.object({
   page: z.number().int().positive().default(1),
@@ -231,7 +216,6 @@ export const Validator = {
   pageUpdateSchema,
   mediaUploadSchema,
   pluginManifestSchema,
-  themeManifestSchema,
   paginationSchema,
   searchSchema,
   

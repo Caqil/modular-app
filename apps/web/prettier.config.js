@@ -1,1 +1,0 @@
-module.exports = require('@modular-app/config/prettier');

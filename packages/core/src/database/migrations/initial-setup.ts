@@ -9,7 +9,6 @@ import { UserRepository } from '../repositories/user-repository';
 import { User, type IUser } from '../models/user';
 import { Setting } from '../models/setting';
 import { Plugin } from '../models/plugin';
-import { Theme } from '../models/theme';
 import { UserRole, UserStatus } from '../../types/user';
 import { PluginStatus } from '../../types/plugin';
 
@@ -35,9 +34,6 @@ export interface SetupConfig {
   plugins?: {
     autoActivate?: string[];
   };
-  theme?: {
-    active?: string;
-  };
 }
 
 export interface SetupResult {
@@ -56,9 +52,6 @@ export interface SetupResult {
     plugins: {
       installed: number;
       activated: number;
-    };
-    theme: {
-      active?: string;
     };
   };
   errors?: string[];
@@ -164,10 +157,6 @@ export class InitialSetup {
       const pluginsResult = await this.initializePlugins(config.plugins);
       this.updateProgress('plugins', 5, 8, `${pluginsResult.activated} plugins activated`);
 
-      // Initialize theme
-      const themeResult = await this.initializeTheme(config.theme);
-      this.updateProgress('theme', 6, 8, `Theme '${themeResult.active}' activated`);
-
       // Create sample content (optional)
       await this.createSampleContent();
       this.updateProgress('content', 7, 8, 'Sample content created');
@@ -189,7 +178,6 @@ export class InitialSetup {
           },
           settings: settingsResult,
           plugins: pluginsResult,
-          theme: themeResult,
         }
       };
 
@@ -283,7 +271,7 @@ export class InitialSetup {
     try {
       this.logger.info('Creating database indexes...');
 
-      const models = [User, Setting, Plugin, Theme];
+      const models = [User, Setting, Plugin];
       
       for (const model of models) {
         await model.createIndexes();
@@ -438,43 +426,6 @@ export class InitialSetup {
     } catch (error) {
       this.logger.error('Error initializing plugins:', error);
       throw new Error('Failed to initialize plugins');
-    }
-  }
-
-  /**
-   * Initialize theme
-   */
-  private async initializeTheme(themeConfig?: SetupConfig['theme']): Promise<{ active: string }> {
-    try {
-      this.logger.info('Initializing theme...');
-
-      const themeName = themeConfig?.active || 'default';
-      
-      // Set active theme in settings
-      await this.settingsRepo.getSetting('theme.active', themeName);
-
-      // Activate theme if it exists in database
-      const theme = await Theme.findOne({ name: themeName });
-      if (theme) {
-        theme.status = 'active';
-        theme.activatedAt = new Date();
-        await theme.save();
-
-        await this.events.emit(EventType.THEME_ACTIVATED, {
-          id: theme.id.toString(),
-          name: theme.name,
-          version: theme.version,
-          source: 'initial_setup',
-          timestamp: new Date(),
-        });
-      }
-
-      this.logger.info(`Theme initialized: ${themeName}`);
-
-      return { active: themeName };
-    } catch (error) {
-      this.logger.error('Error initializing theme:', error);
-      throw new Error('Failed to initialize theme');
     }
   }
 

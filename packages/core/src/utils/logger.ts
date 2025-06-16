@@ -168,14 +168,6 @@ export class Logger {
     });
   }
 
-  logThemeAction(theme: string, action: string, data?: any): void {
-    this.info(`Theme ${action}`, {
-      theme,
-      action,
-      data,
-    });
-  }
-
   createChild(context: string): Logger {
     return new Logger(`${this.context}:${context}`);
   }

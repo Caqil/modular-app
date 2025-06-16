@@ -1,1 +1,0 @@
-export default function post-grid() { return <div>post-grid</div> }

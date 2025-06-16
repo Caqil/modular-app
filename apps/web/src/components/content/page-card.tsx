@@ -1,1 +1,0 @@
-export default function page-card() { return <div>page-card</div> }

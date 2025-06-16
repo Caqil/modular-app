@@ -21,7 +21,6 @@ export enum PluginCapability {
   WIDGETS = 'widgets',
   SHORTCODES = 'shortcodes',
   BLOCKS = 'blocks',
-  THEMES = 'themes',
   AUTHENTICATION = 'authentication',
   CACHING = 'caching',
   SEO = 'seo',

@@ -411,14 +411,7 @@ export class PluginHooks {
         ],
         since: '1.0.0',
       },
-      {
-        name: 'theme:activated',
-        description: 'Fired when theme is activated',
-        parameters: [
-          { name: 'theme', type: 'string', description: 'Theme name' },
-        ],
-        since: '1.0.0',
-      },
+      
     ];
   }
 

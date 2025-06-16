@@ -1,1 +1,0 @@
-export default function author-bio() { return <div>author-bio</div> }

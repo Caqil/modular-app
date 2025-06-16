@@ -1,5 +1,4 @@
 import type { PluginManager } from '../plugin/plugin-manager';
-import type { ThemeManager } from '../theme/theme-manager';
 import type { HookManager } from '../hooks/hook-manager';
 import type { EventManager } from '../events/event-manager';
 import type { ConfigManager } from '../config/config-manager';
@@ -51,7 +50,6 @@ export interface CMSConfig {
 
 export interface CMSInstance {
   plugins: PluginManager;
-  themes: ThemeManager;
   hooks: HookManager;
   events: EventManager;
   config: ConfigManager;
@@ -104,7 +102,6 @@ export interface CMSStats {
   uptime: number;
   requests: number;
   activePlugins: number;
-  activeTheme: string;
   memoryUsage: NodeJS.MemoryUsage;
   databaseConnections: number;
   cacheHitRate?: number;

@@ -1,44 +1,27 @@
 {
-  "extends": "@modular-app/config/typescript/react",
   "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@modular-app/core": [
-        "../../packages/core/src"
-      ],
-      "@modular-app/core/*": [
-        "../../packages/core/src/*"
-      ],
-      "@modular-app/ui": [
-        "../../packages/ui/src"
-      ],
-      "@modular-app/ui/*": [
-        "../../packages/ui/src/*"
-      ],
-      "@modular-app/config": [
-        "../../packages/config/src"
-      ],
-      "@modular-app/config/*": [
-        "../../packages/config/src/*"
-      ]
-    },
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
     "plugins": [
       {
         "name": "next"
       }
     ],
-    "incremental": true
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
 }

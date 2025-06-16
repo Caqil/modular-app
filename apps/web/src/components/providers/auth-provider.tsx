@@ -1,1 +1,0 @@
-export default function auth-provider() { return <div>auth-provider</div> }

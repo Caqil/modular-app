@@ -1,1 +1,0 @@
-export default function content-renderer() { return <div>content-renderer</div> }

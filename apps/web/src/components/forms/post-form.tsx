@@ -1,1 +1,0 @@
-export default function post-form() { return <div>post-form</div> }

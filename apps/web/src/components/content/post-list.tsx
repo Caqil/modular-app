@@ -1,1 +1,0 @@
-export default function post-list() { return <div>post-list</div> }

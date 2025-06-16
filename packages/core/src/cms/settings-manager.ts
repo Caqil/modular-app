@@ -1324,19 +1324,6 @@ private async registerDefaultDefinitions(): Promise<void> {
   // ===================================================================
 
   this.registerDefinition({
-    key: 'theme.active',
-    type: 'string',
-    defaultValue: 'default',
-    label: 'Active Theme',
-    description: 'Currently active theme',
-    group: 'appearance',
-    section: 'theme',
-    public: true,
-    required: true,
-    editable: true,
-  });
-
-  this.registerDefinition({
     key: 'theme.dark_mode',
     type: 'boolean',
     defaultValue: false,

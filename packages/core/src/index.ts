@@ -16,7 +16,6 @@ export {
   Tag as TagModel, 
   Comment as CommentModel, 
   Plugin as PluginModel, 
-  Theme as ThemeModel, 
   Setting as SettingModel 
 } from './database/models';
 
@@ -30,7 +29,6 @@ export type {
   ITag,
   IComment,
   IPlugin,
-  ITheme as IThemeModel,
   ISetting
 } from './database/models';
 
@@ -57,11 +55,6 @@ export * from './database/repositories/settings-repository';
 // TYPE EXPORTS
 // ===================================================================
 
-// Core Enums - Exported as values
-export {
-  ThemeStatus,
-  ThemeSupport,
-} from './types/theme';
 
 export {
   ContentStatus,
@@ -72,25 +65,6 @@ export {
   UserRole,
   UserStatus,
 } from './types/user';
-
-// Theme Types
-export type {
-  Theme as ThemeInterface,
-  ThemeManifest,
-  ThemeTemplate,
-  ThemeCustomizer,
-  ThemeCustomizerPanel,
-  ThemeCustomizerSection,
-  ThemeCustomizerSetting,
-  ThemeMenu,
-  ThemeWidgetArea,
-  ThemeColor,
-  ThemeFont,
-  ThemeSettings,
-  ThemeRecord,
-  ThemeError,
-  ThemeEvent,
-} from './types/theme';
 
 // Content Types
 export type {
@@ -153,11 +127,6 @@ export type {
 // Core Managers
 export { ConfigManager } from './config/config-manager';
 export { PluginManager } from './plugin/plugin-manager';
-export { ThemeManager } from './theme/theme-manager';
-
-// Theme sub-managers
-export * from './theme/theme-loader';
-export * from './theme/theme-registry';
 
 // ===================================================================
 // UTILITIES

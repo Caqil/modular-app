@@ -1,1 +1,0 @@
-export default function feature-grid() { return <div>feature-grid</div> }

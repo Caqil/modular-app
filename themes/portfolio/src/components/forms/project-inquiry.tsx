@@ -1,1 +1,0 @@
-export default function project-inquiry() { return <div>project-inquiry</div> }

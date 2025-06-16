@@ -1,1 +1,0 @@
-export default function post-meta() { return <div>post-meta</div> }

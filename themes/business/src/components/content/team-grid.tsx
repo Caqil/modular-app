@@ -1,1 +1,0 @@
-export default function team-grid() { return <div>team-grid</div> }

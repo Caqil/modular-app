@@ -853,7 +853,6 @@ export class ConfigManager extends EventEmitter {
       'auth.jwt.secret',
       'cache.enabled',
       'plugins.enabled',
-      'themes.enabled',
     ];
 
     await Promise.all(

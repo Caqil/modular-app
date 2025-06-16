@@ -1,1 +1,0 @@
-export default function image-gallery() { return <div>image-gallery</div> }

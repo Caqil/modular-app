@@ -637,7 +637,6 @@ export class PermissionManager {
       { name: 'admin:access', description: 'Access admin panel', category: 'admin' },
       { name: 'admin:settings', description: 'Manage settings', category: 'admin' },
       { name: 'admin:plugins', description: 'Manage plugins', category: 'admin' },
-      { name: 'admin:themes', description: 'Manage themes', category: 'admin' },
 
       // Media permissions
       { name: 'media:read', description: 'View media', category: 'media' },

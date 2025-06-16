@@ -17,7 +17,6 @@
     "release": "turbo build --filter=@modular-app/web && changeset publish",
     "db:migrate": "node scripts/migration.js",
     "plugin:generate": "node scripts/generate-plugin.js",
-    "theme:generate": "node scripts/generate-theme.js",
     "fresh-install": "pnpm clean && rm -rf node_modules && rm -rf packages/*/node_modules && rm -rf apps/*/node_modules && pnpm install"
   },
   "devDependencies": {

@@ -121,12 +121,6 @@ const envSchema = z.object({
   PLUGINS_AUTO_LOAD: z.coerce.boolean().default(true),
   PLUGINS_ALLOW_REMOTE_INSTALL: z.coerce.boolean().default(false),
 
-  // Theme System
-  THEMES_ENABLED: z.coerce.boolean().default(true),
-  THEMES_DIR: z.string().default('./themes'),
-  THEMES_AUTO_LOAD: z.coerce.boolean().default(true),
-  DEFAULT_THEME: z.string().default('default'),
-
   // Performance
   ENABLE_COMPRESSION: z.coerce.boolean().default(true),
   ENABLE_CACHING: z.coerce.boolean().default(true),
@@ -240,7 +234,6 @@ export class EnvConfigManager {
         cacheAdapter: this.config.CACHE_ADAPTER,
         storageAdapter: this.config.STORAGE_ADAPTER,
         pluginsEnabled: this.config.PLUGINS_ENABLED,
-        themesEnabled: this.config.THEMES_ENABLED,
         apiEnabled: this.config.API_ENABLED,
       });
 
@@ -548,14 +541,12 @@ export class EnvConfigManager {
   /**
    * Check if a feature is enabled
    */
-  public isFeatureEnabled(feature: 'plugins' | 'themes' | 'api' | 'caching' | 'compression'): boolean {
+  public isFeatureEnabled(feature: 'plugins' | 'api' | 'caching' | 'compression'): boolean {
     const config = this.getConfig();
     
     switch (feature) {
       case 'plugins':
         return config.PLUGINS_ENABLED;
-      case 'themes':
-        return config.THEMES_ENABLED;
       case 'api':
         return config.API_ENABLED;
       case 'caching':

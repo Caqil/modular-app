@@ -1,1 +1,0 @@
-export default function admin-header() { return <div>admin-header</div> }

@@ -1,1 +1,0 @@
-export default function plugin-card() { return <div>plugin-card</div> }

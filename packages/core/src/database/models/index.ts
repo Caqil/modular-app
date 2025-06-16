@@ -11,7 +11,6 @@ export { Category, type ICategory } from './taxonomy';
 export { Tag, type ITag } from './taxonomy';
 export { Comment, type IComment } from './taxonomy';
 export { Plugin, type IPlugin } from './plugin';
-export { Theme, type ITheme } from './theme';
 export { Setting, type ISetting } from './setting';
 import { SettingsRepository } from '../repositories/settings-repository';
 import { UserRepository } from '../repositories/user-repository';
@@ -29,7 +28,6 @@ export const MODEL_NAMES = {
   TAG: 'Tag',
   COMMENT: 'Comment',
   PLUGIN: 'Plugin',
-  THEME: 'Theme',
   SETTING: 'Setting',
 } as const;
 
@@ -43,7 +41,6 @@ export const COLLECTION_NAMES = {
   TAGS: 'tags',
   COMMENTS: 'comments',
   PLUGINS: 'plugins',
-  THEMES: 'themes',
   SETTINGS: 'settings',
 } as const;
 
@@ -57,7 +54,6 @@ export const MODELS = {
   [MODEL_NAMES.TAG]: () => require('./taxonomy').Tag,
   [MODEL_NAMES.COMMENT]: () => require('./taxonomy').Comment,
   [MODEL_NAMES.PLUGIN]: () => require('./plugin').Plugin,
-  [MODEL_NAMES.THEME]: () => require('./theme').Theme,
   [MODEL_NAMES.SETTING]: () => require('./setting').Setting,
 } as const;
 
@@ -84,7 +80,6 @@ export async function initializeModels(): Promise<void> {
       import('./media'),
       import('./taxonomy'),
       import('./plugin'),
-      import('./theme'),
       import('./setting'),
     ]);
 

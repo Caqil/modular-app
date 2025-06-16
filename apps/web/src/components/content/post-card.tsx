@@ -1,1 +1,0 @@
-export default function post-card() { return <div>post-card</div> }

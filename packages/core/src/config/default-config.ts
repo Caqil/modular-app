@@ -258,30 +258,6 @@ export interface PluginConfig {
   };
 }
 
-export interface ThemeConfig {
-  enabled: boolean;
-  directory: string;
-  autoLoad: boolean;
-  default: string;
-  allowCustomCSS: boolean;
-  allowCustomJS: boolean;
-  customization: {
-    colors: {
-      enabled: boolean;
-      presets: Record<string, string[]>;
-    };
-    typography: {
-      enabled: boolean;
-      fonts: string[];
-      sizes: number[];
-    };
-    layout: {
-      enabled: boolean;
-      maxWidth: number;
-      sidebars: string[];
-    };
-  };
-}
 
 export interface PerformanceConfig {
   caching: {
@@ -417,7 +393,6 @@ export interface DefaultConfig {
   security: SecurityConfig;
   logging: LoggingConfig;
   plugins: PluginConfig;
-  themes: ThemeConfig;
   performance: PerformanceConfig;
   api: APIConfig;
   site: SiteConfig;
@@ -646,35 +621,6 @@ export const defaultConfig: DefaultConfig = {
       allowFileAccess: false,
       allowNetworkAccess: false,
       allowDatabaseAccess: true,
-    },
-  },
-
-  themes: {
-    enabled: true,
-    directory: './themes',
-    autoLoad: true,
-    default: 'default',
-    allowCustomCSS: true,
-    allowCustomJS: false,
-    customization: {
-      colors: {
-        enabled: true,
-        presets: {
-          default: ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b'],
-          dark: ['#1e40af', '#dc2626', '#16a34a', '#d97706'],
-          light: ['#60a5fa', '#f87171', '#4ade80', '#fbbf24'],
-        },
-      },
-      typography: {
-        enabled: true,
-        fonts: ['Inter', 'Roboto', 'Open Sans', 'Lato', 'Montserrat'],
-        sizes: [12, 14, 16, 18, 20, 24, 32, 48],
-      },
-      layout: {
-        enabled: true,
-        maxWidth: 1200,
-        sidebars: ['left', 'right', 'both', 'none'],
-      },
     },
   },
 

@@ -1,1 +1,0 @@
-export default function featured-post() { return <div>featured-post</div> }

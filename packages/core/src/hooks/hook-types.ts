@@ -119,12 +119,6 @@ export enum CoreHooks {
   PLUGIN_BEFORE_DEACTIVATE = 'plugin:before_deactivate',
   PLUGIN_DEACTIVATED = 'plugin:deactivated',
 
-  // Theme hooks
-  THEME_LOADED = 'theme:loaded',
-  THEME_BEFORE_ACTIVATE = 'theme:before_activate',
-  THEME_ACTIVATED = 'theme:activated',
-  THEME_BEFORE_DEACTIVATE = 'theme:before_deactivate',
-  THEME_DEACTIVATED = 'theme:deactivated',
 
   // Content hooks
   CONTENT_BEFORE_CREATE = 'content:before_create',
@@ -173,11 +167,6 @@ export enum CoreFilters {
   ADMIN_MENU_ITEMS = 'admin:menu_items',
   ADMIN_DASHBOARD_WIDGETS = 'admin:dashboard_widgets',
   ADMIN_USER_CAPABILITIES = 'admin:user_capabilities',
-
-  // Theme filters
-  THEME_TEMPLATE_PATH = 'theme:template_path',
-  THEME_ASSET_URL = 'theme:asset_url',
-  THEME_CUSTOMIZER_SETTINGS = 'theme:customizer_settings',
 
   // Plugin filters
   PLUGIN_SETTINGS = 'plugin:settings',

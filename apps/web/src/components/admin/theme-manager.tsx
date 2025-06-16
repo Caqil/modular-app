@@ -1,1 +1,0 @@
-export default function theme-manager() { return <div>theme-manager</div> }
