@@ -774,58 +774,822 @@ public async exportSettings(options: {
   // PRIVATE HELPER METHODS
   // ===================================================================
 
-  /**
-   * Register default setting definitions
-   */
-  private async registerDefaultDefinitions(): Promise<void> {
-    // Site settings
-    this.registerDefinition({
-      key: 'site.title',
-      type: 'string',
-      defaultValue: 'Modular CMS',
-      label: 'Site Title',
-      description: 'The title of your website',
-      group: 'general',
-      section: 'site',
-      public: true,
-      required: true,
-      validation: {
-        min: 1,
-        max: 255,
-      },
-    });
+ /**
+ * Register default setting definitions
+ */
+private async registerDefaultDefinitions(): Promise<void> {
+  // ===================================================================
+  // GENERAL SETTINGS
+  // ===================================================================
+  
+  // Site settings
+  this.registerDefinition({
+    key: 'site.title',
+    type: 'string',
+    defaultValue: 'Modular CMS',
+    label: 'Site Title',
+    description: 'The title of your website',
+    group: 'general',
+    section: 'site',
+    public: true,
+    required: true,
+    editable: true,
+    validation: {
+      min: 1,
+      max: 255,
+    },
+  });
 
-    this.registerDefinition({
-      key: 'site.description',
-      type: 'string',
-      defaultValue: 'A modern, modular content management system',
-      label: 'Site Description',
-      description: 'A brief description of your website',
-      group: 'general',
-      section: 'site',
-      public: true,
-      validation: {
-        max: 500,
-      },
-    });
+  this.registerDefinition({
+    key: 'site.description',
+    type: 'string',
+    defaultValue: 'A modern, modular content management system',
+    label: 'Site Description',
+    description: 'A brief description of your website',
+    group: 'general',
+    section: 'site',
+    public: true,
+    editable: true,
+    validation: {
+      max: 500,
+    },
+  });
 
-    this.registerDefinition({
-      key: 'site.url',
-      type: 'string',
-      defaultValue: 'http://localhost:3000',
-      label: 'Site URL',
-      description: 'The URL of your website',
-      group: 'general',
-      section: 'site',
-      public: true,
-      required: true,
-      validation: {
-        pattern: /^https?:\/\/.+/,
-      },
-    });
+  this.registerDefinition({
+    key: 'site.url',
+    type: 'string',
+    defaultValue: 'http://localhost:3000',
+    label: 'Site URL',
+    description: 'The URL of your website',
+    group: 'general',
+    section: 'site',
+    public: true,
+    required: true,
+    editable: true,
+    validation: {
+      pattern: /^https?:\/\/.+/,
+    },
+  });
 
-    // Add more default definitions as needed...
-  }
+  this.registerDefinition({
+    key: 'site.language',
+    type: 'string',
+    defaultValue: 'en',
+    label: 'Default Language',
+    description: 'Default language for your website',
+    group: 'general',
+    section: 'site',
+    public: true,
+    editable: true,
+    choices: {
+      'en': 'English',
+      'es': 'Spanish',
+      'fr': 'French',
+      'de': 'German',
+      'it': 'Italian',
+      'pt': 'Portuguese',
+      'ru': 'Russian',
+      'ja': 'Japanese',
+      'ko': 'Korean',
+      'zh': 'Chinese',
+    },
+  });
+
+  this.registerDefinition({
+    key: 'site.timezone',
+    type: 'string',
+    defaultValue: 'UTC',
+    label: 'Timezone',
+    description: 'Default timezone for dates and times',
+    group: 'general',
+    section: 'site',
+    public: true,
+    editable: true,
+    choices: {
+      'UTC': 'UTC',
+      'America/New_York': 'Eastern Time',
+      'America/Chicago': 'Central Time',
+      'America/Denver': 'Mountain Time',
+      'America/Los_Angeles': 'Pacific Time',
+      'Europe/London': 'London',
+      'Europe/Paris': 'Paris',
+      'Europe/Berlin': 'Berlin',
+      'Asia/Tokyo': 'Tokyo',
+      'Asia/Shanghai': 'Shanghai',
+      'Australia/Sydney': 'Sydney',
+    },
+  });
+
+  this.registerDefinition({
+    key: 'site.admin_email',
+    type: 'string',
+    defaultValue: 'admin@example.com',
+    label: 'Admin Email',
+    description: 'Administrator email address',
+    group: 'general',
+    section: 'site',
+    public: false,
+    required: true,
+    editable: true,
+    sensitive: true,
+    validation: {
+      pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    },
+  });
+
+  // ===================================================================
+  // CONTENT SETTINGS
+  // ===================================================================
+
+  this.registerDefinition({
+    key: 'posts.per_page',
+    type: 'number',
+    defaultValue: 10,
+    label: 'Posts Per Page',
+    description: 'Number of posts to display per page',
+    group: 'content',
+    section: 'posts',
+    public: true,
+    editable: true,
+    validation: {
+      min: 1,
+      max: 100,
+    },
+  });
+
+  this.registerDefinition({
+    key: 'posts.default_status',
+    type: 'string',
+    defaultValue: 'draft',
+    label: 'Default Post Status',
+    description: 'Default status for new posts',
+    group: 'content',
+    section: 'posts',
+    public: false,
+    editable: true,
+    choices: {
+      'draft': 'Draft',
+      'published': 'Published',
+      'scheduled': 'Scheduled',
+    },
+  });
+
+  this.registerDefinition({
+    key: 'posts.allow_excerpts',
+    type: 'boolean',
+    defaultValue: true,
+    label: 'Allow Post Excerpts',
+    description: 'Enable manual excerpts for posts',
+    group: 'content',
+    section: 'posts',
+    public: true,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'posts.excerpt_length',
+    type: 'number',
+    defaultValue: 150,
+    label: 'Auto Excerpt Length',
+    description: 'Number of words for automatic excerpts',
+    group: 'content',
+    section: 'posts',
+    public: true,
+    editable: true,
+    validation: {
+      min: 10,
+      max: 500,
+    },
+  });
+
+  // Comments
+  this.registerDefinition({
+    key: 'comments.enabled',
+    type: 'boolean',
+    defaultValue: true,
+    label: 'Enable Comments',
+    description: 'Allow users to comment on posts',
+    group: 'content',
+    section: 'comments',
+    public: true,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'comments.moderation',
+    type: 'boolean',
+    defaultValue: true,
+    label: 'Comment Moderation',
+    description: 'Moderate comments before publishing',
+    group: 'content',
+    section: 'comments',
+    public: false,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'comments.registration_required',
+    type: 'boolean',
+    defaultValue: false,
+    label: 'Registration Required',
+    description: 'Require user registration to comment',
+    group: 'content',
+    section: 'comments',
+    public: true,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'comments.max_depth',
+    type: 'number',
+    defaultValue: 3,
+    label: 'Maximum Comment Depth',
+    description: 'Maximum depth for threaded comments',
+    group: 'content',
+    section: 'comments',
+    public: false,
+    editable: true,
+    validation: {
+      min: 1,
+      max: 10,
+    },
+  });
+
+  // ===================================================================
+  // USER & REGISTRATION SETTINGS
+  // ===================================================================
+
+  this.registerDefinition({
+    key: 'users.registration_enabled',
+    type: 'boolean',
+    defaultValue: true,
+    label: 'User Registration',
+    description: 'Allow new user registration',
+    group: 'users',
+    section: 'registration',
+    public: true,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'users.default_role',
+    type: 'string',
+    defaultValue: 'subscriber',
+    label: 'Default User Role',
+    description: 'Default role for new users',
+    group: 'users',
+    section: 'registration',
+    public: false,
+    editable: true,
+    choices: {
+      'subscriber': 'Subscriber',
+      'contributor': 'Contributor',
+      'author': 'Author',
+      'editor': 'Editor',
+    },
+  });
+
+  this.registerDefinition({
+    key: 'users.email_verification',
+    type: 'boolean',
+    defaultValue: true,
+    label: 'Email Verification',
+    description: 'Require email verification for new accounts',
+    group: 'users',
+    section: 'registration',
+    public: false,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'users.strong_passwords',
+    type: 'boolean',
+    defaultValue: true,
+    label: 'Require Strong Passwords',
+    description: 'Enforce strong password requirements',
+    group: 'users',
+    section: 'security',
+    public: false,
+    editable: true,
+  });
+
+  // ===================================================================
+  // EMAIL SETTINGS
+  // ===================================================================
+
+  this.registerDefinition({
+    key: 'email.from_name',
+    type: 'string',
+    defaultValue: 'Modular CMS',
+    label: 'From Name',
+    description: 'Name used in outgoing emails',
+    group: 'email',
+    section: 'smtp',
+    public: false,
+    editable: true,
+    validation: {
+      min: 1,
+      max: 100,
+    },
+  });
+
+  this.registerDefinition({
+    key: 'email.from_address',
+    type: 'string',
+    defaultValue: 'noreply@example.com',
+    label: 'From Address',
+    description: 'Email address used for outgoing emails',
+    group: 'email',
+    section: 'smtp',
+    public: false,
+    required: true,
+    editable: true,
+    sensitive: true,
+    validation: {
+      pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    },
+  });
+
+  this.registerDefinition({
+    key: 'email.reply_to',
+    type: 'string',
+    defaultValue: '',
+    label: 'Reply To Address',
+    description: 'Email address for replies (optional)',
+    group: 'email',
+    section: 'smtp',
+    public: false,
+    editable: true,
+    validation: {
+      pattern: /^$|^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    },
+  });
+
+  this.registerDefinition({
+    key: 'email.notifications_enabled',
+    type: 'boolean',
+    defaultValue: true,
+    label: 'Email Notifications',
+    description: 'Enable email notifications',
+    group: 'email',
+    section: 'notifications',
+    public: false,
+    editable: true,
+  });
+
+  // ===================================================================
+  // MEDIA SETTINGS
+  // ===================================================================
+
+  this.registerDefinition({
+    key: 'media.max_upload_size',
+    type: 'number',
+    defaultValue: 50 * 1024 * 1024, // 50MB
+    label: 'Max Upload Size',
+    description: 'Maximum file upload size in bytes',
+    group: 'media',
+    section: 'uploads',
+    public: false,
+    editable: true,
+    validation: {
+      min: 1024 * 1024, // 1MB minimum
+      max: 500 * 1024 * 1024, // 500MB maximum
+    },
+  });
+
+  this.registerDefinition({
+    key: 'media.allowed_types',
+    type: 'json',
+    defaultValue: [
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+      'video/mp4', 'video/webm', 'video/ogg',
+      'audio/mp3', 'audio/wav', 'audio/ogg',
+      'application/pdf', 'text/plain', 'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ],
+    label: 'Allowed File Types',
+    description: 'Allowed MIME types for file uploads',
+    group: 'media',
+    section: 'uploads',
+    public: false,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'media.image_quality',
+    type: 'number',
+    defaultValue: 85,
+    label: 'Image Quality',
+    description: 'JPEG compression quality (1-100)',
+    group: 'media',
+    section: 'images',
+    public: false,
+    editable: true,
+    validation: {
+      min: 1,
+      max: 100,
+    },
+  });
+
+  this.registerDefinition({
+    key: 'media.thumbnail_size',
+    type: 'json',
+    defaultValue: { width: 150, height: 150 },
+    label: 'Thumbnail Size',
+    description: 'Default thumbnail dimensions',
+    group: 'media',
+    section: 'images',
+    public: false,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'media.medium_size',
+    type: 'json',
+    defaultValue: { width: 300, height: 300 },
+    label: 'Medium Size',
+    description: 'Medium image dimensions',
+    group: 'media',
+    section: 'images',
+    public: false,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'media.large_size',
+    type: 'json',
+    defaultValue: { width: 1024, height: 1024 },
+    label: 'Large Size',
+    description: 'Large image dimensions',
+    group: 'media',
+    section: 'images',
+    public: false,
+    editable: true,
+  });
+
+  // ===================================================================
+  // SECURITY SETTINGS
+  // ===================================================================
+
+  this.registerDefinition({
+    key: 'security.max_login_attempts',
+    type: 'number',
+    defaultValue: 5,
+    label: 'Max Login Attempts',
+    description: 'Maximum failed login attempts before lockout',
+    group: 'security',
+    section: 'authentication',
+    public: false,
+    editable: true,
+    validation: {
+      min: 1,
+      max: 20,
+    },
+  });
+
+  this.registerDefinition({
+    key: 'security.lockout_duration',
+    type: 'number',
+    defaultValue: 30,
+    label: 'Lockout Duration',
+    description: 'Account lockout duration in minutes',
+    group: 'security',
+    section: 'authentication',
+    public: false,
+    editable: true,
+    validation: {
+      min: 1,
+      max: 1440, // 24 hours
+    },
+  });
+
+  this.registerDefinition({
+    key: 'security.session_timeout',
+    type: 'number',
+    defaultValue: 1440, // 24 hours
+    label: 'Session Timeout',
+    description: 'Session timeout in minutes',
+    group: 'security',
+    section: 'authentication',
+    public: false,
+    editable: true,
+    validation: {
+      min: 30,
+      max: 10080, // 1 week
+    },
+  });
+
+  this.registerDefinition({
+    key: 'security.two_factor_enabled',
+    type: 'boolean',
+    defaultValue: false,
+    label: 'Two-Factor Authentication',
+    description: 'Enable 2FA for user accounts',
+    group: 'security',
+    section: 'authentication',
+    public: false,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'security.password_min_length',
+    type: 'number',
+    defaultValue: 8,
+    label: 'Minimum Password Length',
+    description: 'Minimum required password length',
+    group: 'security',
+    section: 'passwords',
+    public: false,
+    editable: true,
+    validation: {
+      min: 6,
+      max: 128,
+    },
+  });
+
+  this.registerDefinition({
+    key: 'security.force_ssl',
+    type: 'boolean',
+    defaultValue: false,
+    label: 'Force SSL',
+    description: 'Force HTTPS for all admin pages',
+    group: 'security',
+    section: 'general',
+    public: false,
+    editable: true,
+  });
+
+  // ===================================================================
+  // APPEARANCE SETTINGS
+  // ===================================================================
+
+  this.registerDefinition({
+    key: 'theme.active',
+    type: 'string',
+    defaultValue: 'default',
+    label: 'Active Theme',
+    description: 'Currently active theme',
+    group: 'appearance',
+    section: 'theme',
+    public: true,
+    required: true,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'theme.dark_mode',
+    type: 'boolean',
+    defaultValue: false,
+    label: 'Dark Mode',
+    description: 'Enable dark mode by default',
+    group: 'appearance',
+    section: 'theme',
+    public: true,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'theme.custom_css',
+    type: 'string',
+    defaultValue: '',
+    label: 'Custom CSS',
+    description: 'Additional CSS styles',
+    group: 'appearance',
+    section: 'customization',
+    public: false,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'theme.custom_footer_text',
+    type: 'string',
+    defaultValue: '',
+    label: 'Custom Footer Text',
+    description: 'Custom text for website footer',
+    group: 'appearance',
+    section: 'customization',
+    public: true,
+    editable: true,
+    validation: {
+      max: 500,
+    },
+  });
+
+  // ===================================================================
+  // SEO SETTINGS
+  // ===================================================================
+
+  this.registerDefinition({
+    key: 'seo.meta_description',
+    type: 'string',
+    defaultValue: '',
+    label: 'Default Meta Description',
+    description: 'Default meta description for pages',
+    group: 'seo',
+    section: 'meta',
+    public: true,
+    editable: true,
+    validation: {
+      max: 160,
+    },
+  });
+
+  this.registerDefinition({
+    key: 'seo.meta_keywords',
+    type: 'string',
+    defaultValue: '',
+    label: 'Default Meta Keywords',
+    description: 'Default meta keywords for pages',
+    group: 'seo',
+    section: 'meta',
+    public: true,
+    editable: true,
+    validation: {
+      max: 255,
+    },
+  });
+
+  this.registerDefinition({
+    key: 'seo.robots_txt',
+    type: 'string',
+    defaultValue: 'User-agent: *\nDisallow:',
+    label: 'Robots.txt Content',
+    description: 'Content for robots.txt file',
+    group: 'seo',
+    section: 'crawlers',
+    public: false,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'seo.sitemap_enabled',
+    type: 'boolean',
+    defaultValue: true,
+    label: 'Generate Sitemap',
+    description: 'Automatically generate XML sitemap',
+    group: 'seo',
+    section: 'sitemap',
+    public: false,
+    editable: true,
+  });
+
+  // ===================================================================
+  // PERFORMANCE SETTINGS
+  // ===================================================================
+
+  this.registerDefinition({
+    key: 'performance.cache_enabled',
+    type: 'boolean',
+    defaultValue: true,
+    label: 'Enable Caching',
+    description: 'Enable server-side caching',
+    group: 'performance',
+    section: 'caching',
+    public: false,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'performance.cache_ttl',
+    type: 'number',
+    defaultValue: 3600, // 1 hour
+    label: 'Cache TTL',
+    description: 'Cache time-to-live in seconds',
+    group: 'performance',
+    section: 'caching',
+    public: false,
+    editable: true,
+    validation: {
+      min: 60,
+      max: 86400, // 24 hours
+    },
+  });
+
+  this.registerDefinition({
+    key: 'performance.compression_enabled',
+    type: 'boolean',
+    defaultValue: true,
+    label: 'Enable Compression',
+    description: 'Enable gzip compression',
+    group: 'performance',
+    section: 'optimization',
+    public: false,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'performance.minify_css',
+    type: 'boolean',
+    defaultValue: true,
+    label: 'Minify CSS',
+    description: 'Minify CSS files in production',
+    group: 'performance',
+    section: 'optimization',
+    public: false,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'performance.minify_js',
+    type: 'boolean',
+    defaultValue: true,
+    label: 'Minify JavaScript',
+    description: 'Minify JavaScript files in production',
+    group: 'performance',
+    section: 'optimization',
+    public: false,
+    editable: true,
+  });
+
+  // ===================================================================
+  // API SETTINGS
+  // ===================================================================
+
+  this.registerDefinition({
+    key: 'api.enabled',
+    type: 'boolean',
+    defaultValue: true,
+    label: 'Enable API',
+    description: 'Enable REST API endpoints',
+    group: 'api',
+    section: 'general',
+    public: false,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'api.rate_limit',
+    type: 'number',
+    defaultValue: 1000,
+    label: 'API Rate Limit',
+    description: 'API requests per hour per IP',
+    group: 'api',
+    section: 'security',
+    public: false,
+    editable: true,
+    validation: {
+      min: 100,
+      max: 10000,
+    },
+  });
+
+  this.registerDefinition({
+    key: 'api.require_authentication',
+    type: 'boolean',
+    defaultValue: false,
+    label: 'Require Authentication',
+    description: 'Require authentication for API access',
+    group: 'api',
+    section: 'security',
+    public: false,
+    editable: true,
+  });
+
+  // ===================================================================
+  // MAINTENANCE SETTINGS
+  // ===================================================================
+
+  this.registerDefinition({
+    key: 'maintenance.mode_enabled',
+    type: 'boolean',
+    defaultValue: false,
+    label: 'Maintenance Mode',
+    description: 'Enable maintenance mode',
+    group: 'maintenance',
+    section: 'general',
+    public: false,
+    editable: true,
+  });
+
+  this.registerDefinition({
+    key: 'maintenance.message',
+    type: 'string',
+    defaultValue: 'Website is currently under maintenance. Please check back later.',
+    label: 'Maintenance Message',
+    description: 'Message displayed during maintenance',
+    group: 'maintenance',
+    section: 'general',
+    public: false,
+    editable: true,
+    validation: {
+      max: 500,
+    },
+  });
+
+  this.registerDefinition({
+    key: 'maintenance.allowed_ips',
+    type: 'json',
+    defaultValue: [],
+    label: 'Allowed IPs',
+    description: 'IP addresses allowed during maintenance',
+    group: 'maintenance',
+    section: 'access',
+    public: false,
+    editable: true,
+  });
+
+  this.logger.info('Default setting definitions registered successfully');
+}
 
   /**
    * Register settings hooks

@@ -3,10 +3,13 @@
 // ===================================================================
 
 import { Request, Response, NextFunction } from 'express';
+import rateLimit, { 
+  ValueDeterminingMiddleware, 
+  RateLimitRequestHandler 
+} from 'express-rate-limit';
 import helmet from 'helmet';
 import compression from 'compression';
 import cors from 'cors';
-import rateLimit from 'express-rate-limit';
 import { Logger } from '../utils/logger';
 import { EventManager } from '../events/event-manager';
 import { ConfigManager } from '../config/config-manager';
@@ -427,6 +430,7 @@ export class MiddlewareManager {
             message: 'Validation processing failed',
           },
         });
+        return;
       }
     };
   }

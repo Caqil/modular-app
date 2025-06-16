@@ -204,7 +204,7 @@ export class PermissionManager {
         granted,
         reason: granted 
           ? 'Capability granted' 
-          : `Missing required permissions: ${cap.permissions.filter((_, i) => !permissionResults[i].granted).join(', ')}`,
+          : `Missing required permissions: ${cap.permissions.filter((_, i) => !(permissionResults[i]?.granted)).join(', ')}`,
       };
 
     } catch (error) {
@@ -235,7 +235,7 @@ export class PermissionManager {
         return [];
       }
 
-      const rolePerms = this.rolePermissions.get(user.role);
+      const rolePerms = this.rolePermissions.get(user.role as UserRole);
       if (!rolePerms) {
         return [];
       }
@@ -445,8 +445,8 @@ export class PermissionManager {
     // Check wildcard permission
     if (permission === '*') {
       return {
-        granted: user.role === UserRole.SUPER_ADMIN,
-        reason: user.role === UserRole.SUPER_ADMIN ? 'Super admin access' : 'Wildcard permission denied',
+        granted: (user.role as UserRole) === UserRole.SUPER_ADMIN,
+        reason: (user.role as UserRole) === UserRole.SUPER_ADMIN ? 'Super admin access' : 'Wildcard permission denied',
       };
     }
 
@@ -484,9 +484,9 @@ export class PermissionManager {
           }
 
           // Check conditions if any
-          if (customPerm.conditions) {
-            const conditionsMet = this.evaluateConditions(customPerm.conditions, context);
-            if (conditionsMet) {
+            if (Array.isArray(customPerm.conditions)) {
+          const conditionsMet = this.evaluateConditions(customPerm.conditions, context);
+          if (conditionsMet) {
               return {
                 granted: true,
                 reason: 'Custom permission with conditions met',
@@ -503,7 +503,7 @@ export class PermissionManager {
     }
 
     // Check role-based rules
-    const rolePerms = this.rolePermissions.get(user.role);
+    const rolePerms = this.rolePermissions.get(user.role as UserRole);
     if (rolePerms && rolePerms.rules) {
       for (const rule of rolePerms.rules) {
         if (this.matchesRule(rule, permission, context)) {
@@ -606,7 +606,7 @@ export class PermissionManager {
   ): Promise<void> {
     try {
       await this.events.emit('permission:check', {
-        userId: user._id.toString(),
+        userId: user.id.toString(),
         permission,
         granted: result.granted,
         reason: result.reason,

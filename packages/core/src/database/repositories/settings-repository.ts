@@ -943,188 +943,205 @@ async canModifySetting(key: string, force: boolean = false): Promise<{
     this.cache.delete(key);
     this.cacheExpiry.delete(key);
   }
+/**
+ * Get default settings definitions
+ */
+private getDefaultSettings(): SettingDefinition[] {
+  return [
+    // General Settings
+    {
+      key: 'site.title',
+      type: 'string',
+      defaultValue: 'Modular App',
+      label: 'Site Title',
+      description: 'Website title',
+      group: 'general',
+      public: true,
+      editable: true,
+    },
+    {
+      key: 'site.description',
+      type: 'string',
+      defaultValue: 'A modern CMS built with Next.js',
+      label: 'Site Description',
+      description: 'Website description',
+      group: 'general',
+      public: true,
+      editable: true,
+    },
+    {
+      key: 'site.url',
+      type: 'string',
+      defaultValue: 'http://localhost:3000',
+      label: 'Site URL',
+      description: 'Website URL',
+      group: 'general',
+      public: true,
+      editable: true,
+    },
+    {
+      key: 'site.language',
+      type: 'string',
+      defaultValue: 'en',
+      label: 'Default Language',
+      description: 'Default language',
+      group: 'general',
+      public: true,
+      editable: true,
+    },
+    {
+      key: 'site.timezone',
+      type: 'string',
+      defaultValue: 'UTC',
+      label: 'Timezone',
+      description: 'Default timezone',
+      group: 'general',
+      public: true,
+      editable: true,
+    },
 
-  /**
-   * Get default settings definitions
-   */
-  private getDefaultSettings(): SettingDefinition[] {
-    return [
-      // General Settings
-      {
-        key: 'site.title',
-        type: 'string',
-        defaultValue: 'Modular App',
-        description: 'Website title',
-        group: 'general',
-        public: true,
-        editable: true,
-      },
-      {
-        key: 'site.description',
-        type: 'string',
-        defaultValue: 'A modern CMS built with Next.js',
-        description: 'Website description',
-        group: 'general',
-        public: true,
-        editable: true,
-      },
-      {
-        key: 'site.url',
-        type: 'string',
-        defaultValue: 'http://localhost:3000',
-        description: 'Website URL',
-        group: 'general',
-        public: true,
-        editable: true,
-      },
-      {
-        key: 'site.language',
-        type: 'string',
-        defaultValue: 'en',
-        description: 'Default language',
-        group: 'general',
-        public: true,
-        editable: true,
-      },
-      {
-        key: 'site.timezone',
-        type: 'string',
-        defaultValue: 'UTC',
-        description: 'Default timezone',
-        group: 'general',
-        public: true,
-        editable: true,
-      },
+    // Site Settings
+    {
+      key: 'posts.per_page',
+      type: 'number',
+      defaultValue: 10,
+      label: 'Posts Per Page',
+      description: 'Number of posts per page',
+      group: 'site',
+      public: true,
+      editable: true,
+    },
+    {
+      key: 'comments.enabled',
+      type: 'boolean',
+      defaultValue: true,
+      label: 'Enable Comments',
+      description: 'Enable comments',
+      group: 'site',
+      public: true,
+      editable: true,
+    },
+    {
+      key: 'comments.moderation',
+      type: 'boolean',
+      defaultValue: true,
+      label: 'Comment Moderation',
+      description: 'Moderate comments before publishing',
+      group: 'site',
+      public: false,
+      editable: true,
+    },
+    {
+      key: 'registration.enabled',
+      type: 'boolean',
+      defaultValue: true,
+      label: 'User Registration',
+      description: 'Allow user registration',
+      group: 'site',
+      public: true,
+      editable: true,
+    },
 
-      // Site Settings
-      {
-        key: 'posts.per_page',
-        type: 'number',
-        defaultValue: 10,
-        description: 'Number of posts per page',
-        group: 'site',
-        public: true,
-        editable: true,
-      },
-      {
-        key: 'comments.enabled',
-        type: 'boolean',
-        defaultValue: true,
-        description: 'Enable comments',
-        group: 'site',
-        public: true,
-        editable: true,
-      },
-      {
-        key: 'comments.moderation',
-        type: 'boolean',
-        defaultValue: true,
-        description: 'Moderate comments before publishing',
-        group: 'site',
-        public: false,
-        editable: true,
-      },
-      {
-        key: 'registration.enabled',
-        type: 'boolean',
-        defaultValue: true,
-        description: 'Allow user registration',
-        group: 'site',
-        public: true,
-        editable: true,
-      },
+    // Email Settings
+    {
+      key: 'email.from_name',
+      type: 'string',
+      defaultValue: 'Modular App',
+      label: 'Email From Name',
+      description: 'Email sender name',
+      group: 'email',
+      public: false,
+      editable: true,
+    },
+    {
+      key: 'email.from_address',
+      type: 'string',
+      defaultValue: 'noreply@modular-app.com',
+      label: 'Email From Address',
+      description: 'Email sender address',
+      group: 'email',
+      public: false,
+      editable: true,
+    },
 
-      // Email Settings
-      {
-        key: 'email.from_name',
-        type: 'string',
-        defaultValue: 'Modular App',
-        description: 'Email sender name',
-        group: 'email',
-        public: false,
-        editable: true,
-      },
-      {
-        key: 'email.from_address',
-        type: 'string',
-        defaultValue: 'noreply@modular-app.com',
-        description: 'Email sender address',
-        group: 'email',
-        public: false,
-        editable: true,
-      },
+    // Media Settings
+    {
+      key: 'media.max_upload_size',
+      type: 'number',
+      defaultValue: 50 * 1024 * 1024, // 50MB
+      label: 'Max Upload Size',
+      description: 'Maximum upload file size in bytes',
+      group: 'media',
+      public: false,
+      editable: true,
+    },
+    {
+      key: 'media.allowed_types',
+      type: 'json',
+      defaultValue: [
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+        'video/mp4', 'audio/mp3', 'application/pdf'
+      ],
+      label: 'Allowed File Types',
+      description: 'Allowed file MIME types',
+      group: 'media',
+      public: false,
+      editable: true,
+    },
 
-      // Media Settings
-      {
-        key: 'media.max_upload_size',
-        type: 'number',
-        defaultValue: 50 * 1024 * 1024, // 50MB
-        description: 'Maximum upload file size in bytes',
-        group: 'media',
-        public: false,
-        editable: true,
-      },
-      {
-        key: 'media.allowed_types',
-        type: 'json',
-        defaultValue: [
-          'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-          'video/mp4', 'audio/mp3', 'application/pdf'
-        ],
-        description: 'Allowed file MIME types',
-        group: 'media',
-        public: false,
-        editable: true,
-      },
+    // Security Settings
+    {
+      key: 'security.max_login_attempts',
+      type: 'number',
+      defaultValue: 5,
+      label: 'Max Login Attempts',
+      description: 'Maximum failed login attempts before lockout',
+      group: 'security',
+      public: false,
+      editable: true,
+    },
+    {
+      key: 'security.lockout_duration',
+      type: 'number',
+      defaultValue: 30, // minutes
+      label: 'Lockout Duration',
+      description: 'Account lockout duration in minutes',
+      group: 'security',
+      public: false,
+      editable: true,
+    },
+    {
+      key: 'security.session_timeout',
+      type: 'number',
+      defaultValue: 24 * 60, // 24 hours in minutes
+      label: 'Session Timeout',
+      description: 'Session timeout in minutes',
+      group: 'security',
+      public: false,
+      editable: true,
+    },
 
-      // Security Settings
-      {
-        key: 'security.max_login_attempts',
-        type: 'number',
-        defaultValue: 5,
-        description: 'Maximum failed login attempts before lockout',
-        group: 'security',
-        public: false,
-        editable: true,
-      },
-      {
-        key: 'security.lockout_duration',
-        type: 'number',
-        defaultValue: 30, // minutes
-        description: 'Account lockout duration in minutes',
-        group: 'security',
-        public: false,
-        editable: true,
-      },
-      {
-        key: 'security.session_timeout',
-        type: 'number',
-        defaultValue: 24 * 60, // 24 hours in minutes
-        description: 'Session timeout in minutes',
-        group: 'security',
-        public: false,
-        editable: true,
-      },
-
-      // Appearance Settings
-      {
-        key: 'theme.active',
-        type: 'string',
-        defaultValue: 'default',
-        description: 'Active theme name',
-        group: 'appearance',
-        public: true,
-        editable: true,
-      },
-      {
-        key: 'theme.dark_mode',
-        type: 'boolean',
-        defaultValue: false,
-        description: 'Enable dark mode by default',
-        group: 'appearance',
-        public: true,
-        editable: true,
-      },
-    ];
-  }
+    // Appearance Settings
+    {
+      key: 'theme.active',
+      type: 'string',
+      defaultValue: 'default',
+      label: 'Active Theme',
+      description: 'Active theme name',
+      group: 'appearance',
+      public: true,
+      editable: true,
+    },
+    {
+      key: 'theme.dark_mode',
+      type: 'boolean',
+      defaultValue: false,
+      label: 'Dark Mode',
+      description: 'Enable dark mode by default',
+      group: 'appearance',
+      public: true,
+      editable: true,
+    },
+  ];
+}
 }

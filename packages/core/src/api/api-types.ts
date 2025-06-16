@@ -203,8 +203,10 @@ export interface RateLimitConfig {
   maxRequests: number;
   skipSuccessfulRequests?: boolean;
   skipFailedRequests?: boolean;
-  keyGenerator?: (req: APIRequest) => string;
-  onLimitReached?: (req: APIRequest, res: APIResponse) => void;
+  // Updated to ensure string return and handle Express Request type
+  keyGenerator: (req: Request | APIRequest) => string;
+  // Updated to handle Express Response type
+  onLimitReached: (req: APIRequest, res: APIResponse) => void;
 }
 
 export interface RateLimitInfo {

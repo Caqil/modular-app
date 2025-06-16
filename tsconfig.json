@@ -1,5 +1,5 @@
 {
-  "extends": "@modular-app/packages/config/typescript/base",
+  "extends": "@modular-app/config/typescript/base",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {

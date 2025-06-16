@@ -64,13 +64,11 @@ constructor(config: RedisCacheConfig) {
 
       this.client = createClient({
         url: this.config.url,
-        password: this.config.password,
+        ...(this.config.password ? { password: this.config.password } : {}),
         database: this.config.db,
         socket: {
           connectTimeout: this.config.connectTimeout,
         },
-        retryDelayOnFailover: this.config.retryDelayOnFailover,
-        maxRetriesPerRequest: this.config.maxRetriesPerRequest,
       });
 
       // Event handlers
@@ -88,7 +86,7 @@ constructor(config: RedisCacheConfig) {
       this.client.on('error', (error) => {
         this.logger.error('Redis client error:', error);
         this.connected = false;
-        this.addError('CONNECTION_ERROR', error.message, 'connect');
+        this.addError('CONNECTION_ERROR',error instanceof Error ? error.message : String(error), 'connect');
         this.emitEvent(CacheEventType.ERROR, undefined, { error: error.message });
       });
 
@@ -119,7 +117,7 @@ constructor(config: RedisCacheConfig) {
 
     } catch (error) {
       this.logger.error('Failed to connect to Redis:', error);
-      this.addError('CONNECTION_FAILED', error.message, 'connect');
+      this.addError('CONNECTION_FAILED',error instanceof Error ? error.message : String(error), 'connect');
       throw error;
     }
   }
@@ -167,8 +165,8 @@ constructor(config: RedisCacheConfig) {
 
     } catch (error) {
       this.stats.errors++;
-      this.addError('GET_ERROR', error.message, 'get', key);
-      this.logger.error('Redis get error:', error, { key });
+      this.addError('GET_ERROR',error instanceof Error ? error.message : String(error), 'get', key);
+      this.logger.error('Redis get error:',{ error,  key });
       throw error;
     }
   }
@@ -198,8 +196,8 @@ constructor(config: RedisCacheConfig) {
 
     } catch (error) {
       this.stats.errors++;
-      this.addError('SET_ERROR', error.message, 'set', key);
-      this.logger.error('Redis set error:', error, { key });
+      this.addError('SET_ERROR',error instanceof Error ? error.message : String(error), 'set', key);
+      this.logger.error('Redis set error:', { error, key });
       throw error;
     }
   }
@@ -225,8 +223,8 @@ constructor(config: RedisCacheConfig) {
 
     } catch (error) {
       this.stats.errors++;
-      this.addError('DELETE_ERROR', error.message, 'delete', key);
-      this.logger.error('Redis delete error:', error, { key });
+      this.addError('DELETE_ERROR',error instanceof Error ? error.message : String(error), 'delete', key);
+      this.logger.error('Redis delete error:', {error,  key });
       throw error;
     }
   }
@@ -253,8 +251,8 @@ constructor(config: RedisCacheConfig) {
 
     } catch (error) {
       this.stats.errors++;
-      this.addError('DELETE_PATTERN_ERROR', error.message, 'deletePattern', pattern);
-      this.logger.error('Redis delete pattern error:', error, { pattern });
+      this.addError('DELETE_PATTERN_ERROR',error instanceof Error ? error.message : String(error), 'deletePattern', pattern);
+      this.logger.error('Redis delete pattern error:', { error, pattern });
       throw error;
     }
   }
@@ -278,7 +276,7 @@ constructor(config: RedisCacheConfig) {
 
     } catch (error) {
       this.stats.errors++;
-      this.addError('CLEAR_ERROR', error.message, 'clear');
+      this.addError('CLEAR_ERROR',error instanceof Error ? error.message : String(error), 'clear');
       this.logger.error('Redis clear error:', error);
       throw error;
     }
@@ -297,8 +295,8 @@ constructor(config: RedisCacheConfig) {
       return result === 1;
 
     } catch (error) {
-      this.addError('EXISTS_ERROR', error.message, 'exists', key);
-      this.logger.error('Redis exists error:', error, { key });
+      this.addError('EXISTS_ERROR',error instanceof Error ? error.message : String(error), 'exists', key);
+      this.logger.error('Redis exists error:',  { error, key });
       throw error;
     }
   }
@@ -314,8 +312,8 @@ constructor(config: RedisCacheConfig) {
       return await this.client!.ttl(fullKey);
 
     } catch (error) {
-      this.addError('TTL_ERROR', error.message, 'ttl', key);
-      this.logger.error('Redis TTL error:', error, { key });
+      this.addError('TTL_ERROR',error instanceof Error ? error.message : String(error), 'ttl', key);
+      this.logger.error('Redis TTL error:',  { error, key });
       throw error;
     }
   }
@@ -334,8 +332,8 @@ constructor(config: RedisCacheConfig) {
       return result;
 
     } catch (error) {
-      this.addError('EXPIRE_ERROR', error.message, 'expire', key);
-      this.logger.error('Redis expire error:', error, { key });
+      this.addError('EXPIRE_ERROR',error instanceof Error ? error.message : String(error), 'expire', key);
+      this.logger.error('Redis expire error:',  { error, key });
       throw error;
     }
   }
@@ -354,8 +352,8 @@ constructor(config: RedisCacheConfig) {
       return keys.map(key => key.replace(this.config.keyPrefix, ''));
 
     } catch (error) {
-      this.addError('KEYS_ERROR', error.message, 'keys', pattern);
-      this.logger.error('Redis keys error:', error, { pattern });
+      this.addError('KEYS_ERROR',error instanceof Error ? error.message : String(error), 'keys', pattern);
+      this.logger.error('Redis keys error:',{ error,  pattern });
       throw error;
     }
   }
@@ -373,7 +371,7 @@ constructor(config: RedisCacheConfig) {
       return keys.length;
 
     } catch (error) {
-      this.addError('SIZE_ERROR', error.message, 'size');
+      this.addError('SIZE_ERROR',error instanceof Error ? error.message : String(error), 'size');
       this.logger.error('Redis size error:', error);
       throw error;
     }
@@ -389,7 +387,7 @@ constructor(config: RedisCacheConfig) {
       
       // Parse memory info
       const memoryMatch = redisInfo.match(/used_memory:(\d+)/);
-      const memoryUsage = memoryMatch ? parseInt(memoryMatch[1]) : 0;
+      const memoryUsage = memoryMatch ? parseInt(memoryMatch[1] || '0') : 0;
 
       return {
         name: this.name,
@@ -464,7 +462,7 @@ constructor(config: RedisCacheConfig) {
     try {
       return JSON.stringify(value);
     } catch (error) {
-      throw new Error(`Failed to serialize value: ${error.message}`);
+      throw new Error(`Failed to serialize value: ${error}`);
     }
   }
 
@@ -472,7 +470,7 @@ constructor(config: RedisCacheConfig) {
     try {
       return JSON.parse(value);
     } catch (error) {
-      throw new Error(`Failed to deserialize value: ${error.message}`);
+      throw new Error(`Failed to deserialize value: ${error}`);
     }
   }
 
@@ -494,7 +492,7 @@ constructor(config: RedisCacheConfig) {
       message,
       timestamp: new Date(),
       operation,
-      key,
+      ...(key !== undefined ? { key } : {}),
     };
 
     this.errors.push(error);

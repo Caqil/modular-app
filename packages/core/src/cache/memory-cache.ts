@@ -99,50 +99,54 @@ constructor(config: MemoryCacheConfig) {
 
     } catch (error) {
       this.stats.errors++;
-      this.addError('GET_ERROR', error.message, 'get', key);
-      this.logger.error('Memory cache get error:', error, { key });
+      this.addError('GET_ERROR',  error instanceof Error ? error.message : String(error), 'get', key);
+      this.logger.error('Memory cache get error:',  { error, key });
       throw error;
     }
   }
+/**
+ * Set value in cache
+ */
+public async set<T>(key: string, value: T, ttl?: number): Promise<void> {
+  const start = Date.now();
 
-  /**
-   * Set value in cache
-   */
-  public async set<T>(key: string, value: T, ttl?: number): Promise<void> {
-    const start = Date.now();
+  try {
+    // Check if we need to evict entries
+    await this.ensureCapacity();
 
-    try {
-      // Check if we need to evict entries
-      await this.ensureCapacity();
+    const now = new Date();
+    const effectiveTTL = ttl ?? this.config.ttl;
+    
+    // Build entry object conditionally to handle exactOptionalPropertyTypes
+    const entry: CacheEntry<T> = {
+      key,
+      value: this.config.useClones ? this.deepClone(value) : value,
+      ttl: effectiveTTL,
+      createdAt: now,
+      accessCount: 0,
+      lastAccessed: now,
+    };
 
-      const now = new Date();
-      const effectiveTTL = ttl ?? this.config.ttl;
-      const expiresAt = effectiveTTL > 0 ? new Date(now.getTime() + effectiveTTL * 1000) : undefined;
-
-      const entry: CacheEntry<T> = {
-        key,
-        value: this.config.useClones ? this.deepClone(value) : value,
-        ttl: effectiveTTL,
-        createdAt: now,
-        expiresAt,
-        accessCount: 0,
-        lastAccessed: now,
-      };
-
-      this.cache.set(key, entry);
-
-      const duration = Date.now() - start;
-      this.stats.sets++;
-      this.updateStats();
-      this.emitEvent(CacheEventType.SET, key, { duration, ttl: effectiveTTL });
-
-    } catch (error) {
-      this.stats.errors++;
-      this.addError('SET_ERROR', error.message, 'set', key);
-      this.logger.error('Memory cache set error:', error, { key });
-      throw error;
+    // Only include expiresAt if there's actually an expiration time
+    if (effectiveTTL > 0) {
+      entry.expiresAt = new Date(now.getTime() + effectiveTTL * 1000);
     }
+    // With exactOptionalPropertyTypes: true, we don't set undefined values
+
+    this.cache.set(key, entry);
+
+    const duration = Date.now() - start;
+    this.stats.sets++;
+    this.updateStats();
+    this.emitEvent(CacheEventType.SET, key, { duration, ttl: effectiveTTL });
+
+  } catch (error) {
+    this.stats.errors++;
+    this.addError('SET_ERROR', error instanceof Error ? error.message : String(error), 'set', key);
+    this.logger.error('Memory cache set error:', { error, key });
+    throw error;
   }
+}
 
   /**
    * Delete key from cache
@@ -163,8 +167,8 @@ constructor(config: MemoryCacheConfig) {
 
     } catch (error) {
       this.stats.errors++;
-      this.addError('DELETE_ERROR', error.message, 'delete', key);
-      this.logger.error('Memory cache delete error:', error, { key });
+      this.addError('DELETE_ERROR',  error instanceof Error ? error.message : String(error), 'delete', key);
+      this.logger.error('Memory cache delete error:',  { error, key });
       throw error;
     }
   }
@@ -194,8 +198,8 @@ constructor(config: MemoryCacheConfig) {
 
     } catch (error) {
       this.stats.errors++;
-      this.addError('DELETE_PATTERN_ERROR', error.message, 'deletePattern', pattern);
-      this.logger.error('Memory cache delete pattern error:', error, { pattern });
+      this.addError('DELETE_PATTERN_ERROR',  error instanceof Error ? error.message : String(error), 'deletePattern', pattern);
+      this.logger.error('Memory cache delete pattern error:',{ error,  pattern });
       throw error;
     }
   }
@@ -213,7 +217,7 @@ constructor(config: MemoryCacheConfig) {
 
     } catch (error) {
       this.stats.errors++;
-      this.addError('CLEAR_ERROR', error.message, 'clear');
+      this.addError('CLEAR_ERROR',  error instanceof Error ? error.message : String(error), 'clear');
       this.logger.error('Memory cache clear error:', error);
       throw error;
     }
@@ -239,8 +243,8 @@ constructor(config: MemoryCacheConfig) {
       return true;
 
     } catch (error) {
-      this.addError('EXISTS_ERROR', error.message, 'exists', key);
-      this.logger.error('Memory cache exists error:', error, { key });
+      this.addError('EXISTS_ERROR',  error instanceof Error ? error.message : String(error), 'exists', key);
+      this.logger.error('Memory cache exists error:', { error, key });
       throw error;
     }
   }
@@ -264,8 +268,8 @@ constructor(config: MemoryCacheConfig) {
       return remaining > 0 ? remaining : -2; // Expired
 
     } catch (error) {
-      this.addError('TTL_ERROR', error.message, 'ttl', key);
-      this.logger.error('Memory cache TTL error:', error, { key });
+      this.addError('TTL_ERROR',  error instanceof Error ? error.message : String(error), 'ttl', key);
+      this.logger.error('Memory cache TTL error:',  { error, key });
       throw error;
     }
   }
@@ -284,17 +288,14 @@ constructor(config: MemoryCacheConfig) {
       if (ttl > 0) {
         entry.expiresAt = new Date(Date.now() + ttl * 1000);
         entry.ttl = ttl;
-      } else {
-        entry.expiresAt = undefined;
-        entry.ttl = undefined;
-      }
+      } 
 
       this.emitEvent(CacheEventType.EXPIRE, key, { ttl });
       return true;
 
     } catch (error) {
-      this.addError('EXPIRE_ERROR', error.message, 'expire', key);
-      this.logger.error('Memory cache expire error:', error, { key });
+      this.addError('EXPIRE_ERROR',  error instanceof Error ? error.message : String(error), 'expire', key);
+      this.logger.error('Memory cache expire error:',  { error, key });
       throw error;
     }
   }
@@ -320,8 +321,8 @@ constructor(config: MemoryCacheConfig) {
       return matchingKeys;
 
     } catch (error) {
-      this.addError('KEYS_ERROR', error.message, 'keys', pattern);
-      this.logger.error('Memory cache keys error:', error, { pattern });
+      this.addError('KEYS_ERROR',  error instanceof Error ? error.message : String(error), 'keys', pattern);
+      this.logger.error('Memory cache keys error:',{ error,  pattern });
       throw error;
     }
   }
@@ -352,7 +353,7 @@ constructor(config: MemoryCacheConfig) {
         missRate: this.stats.missRate,
         evictions: this.stats.evictions,
         uptime: Date.now() - this.stats.startTime.getTime(),
-        lastCleanup: this.getLastCleanupTime(),
+        lastCleanup: this.getLastCleanupTime() ?? new Date(0),
         errors: this.errors.slice(-10), // Last 10 errors
       };
 
@@ -462,7 +463,9 @@ constructor(config: MemoryCacheConfig) {
     const toEvict = Math.max(1, Math.floor(entries.length * 0.1));
     
     for (let i = 0; i < toEvict && i < entries.length; i++) {
-      const [key] = entries[i];
+      const entry = entries[i];
+      if (!entry) continue;
+      const [key] = entry;
       this.cache.delete(key);
       this.stats.evictions++;
       this.emitEvent(CacheEventType.EVICT, key);
@@ -549,7 +552,7 @@ constructor(config: MemoryCacheConfig) {
       message,
       timestamp: new Date(),
       operation,
-      key,
+      key: key ?? '',
     };
 
     this.errors.push(error);

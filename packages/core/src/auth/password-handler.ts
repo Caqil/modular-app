@@ -96,7 +96,6 @@ export class PasswordHandler {
       'admin', 'root', 'user', 'guest', 'test', 'demo',
     ],
   };
-
   constructor(config: AuthConfig) {
     this.config = { ...this.defaultPolicy, ...config.password };
     this.bcryptRounds = config.bcrypt.rounds;

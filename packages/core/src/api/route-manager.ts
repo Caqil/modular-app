@@ -226,7 +226,6 @@ export class RouteManager {
       throw error;
     }
   }
-
   /**
    * Register multiple routes
    */

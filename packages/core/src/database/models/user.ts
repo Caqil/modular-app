@@ -1,5 +1,15 @@
 import { Schema, model, Document, Types } from 'mongoose';
 
+// Custom permission interface for users
+export interface CustomUserPermission {
+  permission: string;
+  grantedBy?: string;
+  grantedAt: Date;
+  expiresAt?: Date;
+  conditions?: Record<string, any>;
+  context?: Record<string, any>;
+}
+
 export interface IUser extends Document {
   email: string;
   username: string;
@@ -63,6 +73,8 @@ export interface IUser extends Document {
     invitedBy?: Types.ObjectId;
     notes?: string;
   };
+  // Add custom permissions property
+  customPermissions?: CustomUserPermission[];
   lastLogin?: Date;
   createdAt: Date;
   updatedAt: Date;
