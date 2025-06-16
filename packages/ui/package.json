@@ -12,7 +12,8 @@
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,json}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,json}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,json}\"",
+    "test": "echo 'No tests yet'"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

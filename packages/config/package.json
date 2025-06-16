@@ -10,7 +10,8 @@
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "lint": "eslint \"src/**/*.{js,ts}\"",
     "type-check": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "echo 'No tests yet'"
   },
   "files": [
     "dist",

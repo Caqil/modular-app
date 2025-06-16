@@ -12,7 +12,8 @@
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist",
     "format": "prettier --write \"src/**/*.{ts,js,json}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,js,json}\""
+    "format:check": "prettier --check \"src/**/*.{ts,js,json}\"",
+    "test": "echo 'No tests yet'"
   },
   "dependencies": {
     "@types/node": "^24.0.1",
