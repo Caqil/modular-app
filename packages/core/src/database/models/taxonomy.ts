@@ -59,7 +59,6 @@ const CategorySchema = new Schema<ICategory>({
 });
 
 // Indexes
-CategorySchema.index({ slug: 1 });
 CategorySchema.index({ parentId: 1 });
 CategorySchema.index({ featured: 1 });
 CategorySchema.index({ count: -1 });
@@ -112,7 +111,6 @@ const TagSchema = new Schema<ITag>({
 });
 
 // Indexes
-TagSchema.index({ slug: 1 });
 TagSchema.index({ count: -1 });
 TagSchema.index({ featured: 1 });
 

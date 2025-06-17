@@ -53,7 +53,6 @@ const SettingSchema = new Schema<ISetting>({
 });
 
 // Indexes
-SettingSchema.index({ key: 1 });
 SettingSchema.index({ group: 1 });
 SettingSchema.index({ public: 1 });
 

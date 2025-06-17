@@ -927,12 +927,79 @@ export class APIManager {
     }
   }
 
-  // Additional handlers would follow similar patterns...
   private async getPagesHandler(req: APIRequest, res: APIResponse): Promise<void> {
-    // Similar to getPostsHandler but for pages
-    res.json({ success: true, data: [], message: 'Pages endpoint - to be implemented' });
-  }
+    try {
+      const {
+        page = 1,
+        limit = 20,
+        status,
+        author,
+        search,
+        parent,
+        template,
+        sort = 'createdAt',
+        order = 'desc'
+      } = req.query;
 
+      // Build filter
+      const filter: any = {};
+      
+      if (status) filter.status = status;
+      if (author) filter.author = author;
+      if (parent) filter.parentId = parent === 'null' ? null : parent;
+      if (template) filter.template = template;
+      
+      if (search) {
+        filter.$or = [
+          { title: { $regex: search, $options: 'i' } },
+          { content: { $regex: search, $options: 'i' } },
+          { slug: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      // Calculate pagination
+      const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
+      const sortOrder = order === 'desc' ? -1 : 1;
+
+      // Execute query
+      const [pages, total] = await Promise.all([
+        Page.find(filter)
+          .populate('author', 'username firstName lastName displayName')
+          .populate('parentId', 'title slug')
+          .sort({ [sort as string]: sortOrder })
+          .skip(skip)
+          .limit(parseInt(limit as string))
+          .lean(),
+        Page.countDocuments(filter)
+      ]);
+
+      // Emit event
+      await this.events.emit('page:list', { count: pages.length, filter });
+
+      res.json({
+        success: true,
+        data: pages,
+        meta: {
+          total,
+          page: parseInt(page as string),
+          limit: parseInt(limit as string),
+          totalPages: Math.ceil(total / parseInt(limit as string)),
+          hasNext: skip + pages.length < total,
+          hasPrev: parseInt(page as string) > 1
+        }
+      });
+
+    } catch (error) {
+      this.logger.error('Get pages error:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'GET_PAGES_ERROR',
+          message: 'Failed to retrieve pages',
+        },
+      });
+    }
+  }
   private async getPageHandler(req: APIRequest, res: APIResponse): Promise<void> {
     // Similar to getPostHandler but for pages
     res.json({ success: true, data: null, message: 'Page endpoint - to be implemented' });

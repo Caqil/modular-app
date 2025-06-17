@@ -57,7 +57,7 @@ const PostSchema = new Schema<IPost>({
     required: true,
     trim: true,
     maxlength: 200,
-    index: true,
+    
   },
   slug: {
     type: String,
@@ -86,7 +86,6 @@ const PostSchema = new Schema<IPost>({
     type: String,
     enum: Object.values(ContentStatus),
     default: ContentStatus.DRAFT,
-    index: true,
   },
   type: {
     type: String,
@@ -98,7 +97,7 @@ const PostSchema = new Schema<IPost>({
     type: Schema.Types.ObjectId,
     ref: 'User',
     required: true,
-    index: true,
+    
   },
   featuredImage: {
     type: String,
@@ -142,17 +141,17 @@ const PostSchema = new Schema<IPost>({
     isPinned: {
       type: Boolean,
       default: false,
-      index: true,
+      
     },
     isSticky: {
       type: Boolean,
       default: false,
-      index: true,
+      
     },
     isFeatured: {
       type: Boolean,
       default: false,
-      index: true,
+      
     },
     viewCount: {
       type: Number,
@@ -183,7 +182,7 @@ const PostSchema = new Schema<IPost>({
   categories: [{
     type: Schema.Types.ObjectId,
     ref: 'Category',
-    index: true,
+    
   }],
   tags: {
     type: [String],
@@ -194,7 +193,7 @@ const PostSchema = new Schema<IPost>({
       },
       message: 'Maximum 20 tags allowed',
     },
-    index: true,
+    
   },
   customFields: {
     type: Map,
@@ -203,11 +202,11 @@ const PostSchema = new Schema<IPost>({
   },
   publishedAt: {
     type: Date,
-    index: true,
+    
   },
   scheduledAt: {
     type: Date,
-    index: true,
+    
   },
   lastModifiedBy: {
     type: Schema.Types.ObjectId,
@@ -281,7 +280,6 @@ const PostSchema = new Schema<IPost>({
 });
 
 // Indexes
-PostSchema.index({ slug: 1 }, { unique: true });
 PostSchema.index({ status: 1, publishedAt: -1 });
 PostSchema.index({ author: 1, createdAt: -1 });
 PostSchema.index({ categories: 1, publishedAt: -1 });

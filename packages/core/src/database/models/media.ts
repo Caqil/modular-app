@@ -96,7 +96,7 @@ const MediaSchema = new Schema<IMedia>({
     type: Schema.Types.ObjectId,
     ref: 'User',
     required: true,
-    index: true,
+    
   },
   metadata: {
     width: {
@@ -157,7 +157,7 @@ const MediaSchema = new Schema<IMedia>({
   isPublic: {
     type: Boolean,
     default: true,
-    index: true,
+    
   },
   downloadCount: {
     type: Number,

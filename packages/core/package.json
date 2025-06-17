@@ -13,10 +13,14 @@
     "clean": "rm -rf dist",
     "format": "prettier --write \"src/**/*.{ts,js,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,js,json}\"",
-    "test": "echo 'No tests yet'"
+    "test": "echo 'No tests yet'",
+    "test-server": "tsx src/test-server.ts",
+    "test-server:dev": "tsx watch src/test-server.ts",
+    "test-server:minimal": "tsx src/test-server-minimal.ts",
+    "test-server:minimal:dev": "tsx watch src/test-server-minimal.ts"
   },
   "dependencies": {
-    "@types/node": "^24.0.1",
+    "@redis/client": "^5.5.6",
     "bcryptjs": "^2.4.3",
     "compression": "^1.8.0",
     "cors": "^2.8.5",
@@ -47,7 +51,9 @@
     "@types/jsonwebtoken": "^9.0.5",
     "@types/mime-types": "^2.1.4",
     "@types/multer": "^1.4.13",
+    "@types/node": "^24.0.1",
     "tsup": "^8.0.1",
+    "tsx": "^4.20.3",
     "typescript": "^5.3.3"
   },
   "exports": {

@@ -158,7 +158,6 @@ const PageSchema = new Schema<IPage>({
 });
 
 // Indexes
-PageSchema.index({ slug: 1 });
 PageSchema.index({ status: 1 });
 PageSchema.index({ parentId: 1 });
 PageSchema.index({ template: 1 });

@@ -87,7 +87,7 @@ const PluginSchema = new Schema<IPlugin>({
       },
       message: 'Plugin name can only contain lowercase letters, numbers, hyphens, and underscores',
     },
-    index: true,
+    
   },
   version: {
     type: String,
@@ -154,7 +154,6 @@ const PluginSchema = new Schema<IPlugin>({
     type: String,
     enum: Object.values(PluginStatus),
     default: PluginStatus.INSTALLED,
-    index: true,
   },
   capabilities: {
     type: [String],
@@ -345,15 +344,15 @@ const PluginSchema = new Schema<IPlugin>({
     type: Date,
     required: true,
     default: Date.now,
-    index: true,
+    
   },
   activatedAt: {
     type: Date,
-    index: true,
+    
   },
   lastUpdated: {
     type: Date,
-    index: true,
+    
   },
   errorMessage: {
     type: String,
@@ -420,7 +419,6 @@ const PluginSchema = new Schema<IPlugin>({
 });
 
 // Indexes
-PluginSchema.index({ name: 1 }, { unique: true });
 PluginSchema.index({ status: 1 });
 PluginSchema.index({ capabilities: 1 });
 PluginSchema.index({ author: 1 });
