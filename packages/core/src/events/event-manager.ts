@@ -1,4 +1,3 @@
-
 import path from 'path';
 import { createClient, RedisClientType } from 'redis';
 import { Document, Model, Schema, model } from 'mongoose';
@@ -105,7 +104,7 @@ export class EventManager {
   private static instance: EventManager;
   private emitter: EventEmitter;
   private logger = new Logger('EventManager');
-  private config = ConfigManager.getInstance();
+  private config: ConfigManager | null = null; // CHANGED: Defer initialization
   private initialized = false;
   private middleware: Array<(event: Event) => Promise<Event | null>> = [];
   
@@ -172,11 +171,14 @@ export class EventManager {
     try {
       this.logger.info('Initializing Event Manager...');
 
+      // CHANGED: Initialize ConfigManager here instead of in class declaration
+      this.config = ConfigManager.getInstance();
+
       // Setup core system event listeners
       await this.setupCoreEventListeners();
 
       // Setup persistence if enabled
-      const config = await this.config.get('events', this.defaultConfig);
+      const config = await this.getConfig();
       if (config.persistence.enabled) {
         await this.setupPersistence(config.persistence);
       }
@@ -189,11 +191,6 @@ export class EventManager {
       this.initialized = true;
       this.logger.info('Event Manager initialized successfully');
 
-      // Emit initialization event
-      await this.emit(EventType.CMS_INITIALIZED, {
-        component: 'EventManager',
-        timestamp: new Date(),
-      });
     } catch (error) {
       this.logger.error('Failed to initialize Event Manager:', error);
       throw error;
@@ -201,280 +198,28 @@ export class EventManager {
   }
 
   /**
-   * Shutdown event manager
+   * Get configuration with fallback to default
    */
-  public async shutdown(): Promise<void> {
-    if (!this.initialized) return;
-
-    try {
-      this.logger.info('Shutting down Event Manager...');
-
-      // Emit shutdown event
-      await this.emit(EventType.CMS_SHUTDOWN, {
-        component: 'EventManager',
-        timestamp: new Date(),
-      });
-
-      // Process remaining events
-      await this.flush();
-
-      // Close Redis connections
-      if (this.redisClient) {
-        await this.redisClient.quit();
-        this.redisClient = null;
-      }
-      
-      if (this.broadcastRedisClient) {
-        await this.broadcastRedisClient.quit();
-        this.broadcastRedisClient = null;
-      }
-
-      // Close WebSocket connections
-      this.webSocketClients.clear();
-
-      // Destroy emitter
-      this.emitter.destroy();
-
-      this.initialized = false;
-      this.logger.info('Event Manager shutdown complete');
-    } catch (error) {
-      this.logger.error('Error during Event Manager shutdown:', error);
-      throw error;
+  private async getConfig(): Promise<EventManagerConfig> {
+    if (!this.config) {
+      return this.defaultConfig;
     }
-  }
-
-  /**
-   * Add event listener
-   */
-  public on(
-    eventType: string | EventType,
-    callback: EventCallback,
-    options?: EventListenerOptions,
-    plugin?: string
-  ): string {
-    return this.emitter.on(eventType as string, callback, options, plugin);
-  }
-
-  /**
-   * Add one-time event listener
-   */
-  public once(
-    eventType: string | EventType,
-    callback: EventCallback,
-    options?: EventListenerOptions,
-    plugin?: string
-  ): string {
-    return this.emitter.once(eventType as string, callback, options, plugin);
-  }
-
-  /**
-   * Remove event listener
-   */
-  public off(eventType: string | EventType, listenerId: string): boolean {
-    return this.emitter.off(eventType as string, listenerId);
-  }
-
-  /**
-   * Remove all listeners for event type
-   */
-  public removeAllListeners(eventType?: string | EventType): void {
-    this.emitter.removeAllListeners(eventType as string);
-  }
-
-  /**
-   * Remove all listeners for a plugin
-   */
-  public removePluginListeners(plugin: string): number {
-    return this.emitter.removePluginListeners(plugin);
-  }
-
-  /**
-   * Emit event
-   */
-  public async emit(
-    eventType: string | EventType,
-    payload: EventPayload = {},
-    metadata?: Partial<EventMetadata>
-  ): Promise<void> {
-    try {
-      // Create event object
-      let event: Event = {
-        type: eventType as string,
-        payload,
-        metadata: {
-          timestamp: new Date(),
-          source: 'core',
-          version: '1.0.0',
-          correlationId: this.generateCorrelationId(),
-          ...metadata,
-        },
-      };
-
-      // Process through middleware
-      for (const middleware of this.middleware) {
-        const processedEvent = await middleware(event);
-        if (!processedEvent) {
-          // Event was filtered out by middleware
-          return;
-        }
-        event = processedEvent;
-      }
-
-      // Emit through emitter
-      await this.emitter.emit(event.type, event.payload, event.metadata);
-
-      // Persist event if enabled
-      await this.persistEvent(event);
-
-      // Broadcast event if enabled
-      await this.broadcastEvent(event);
-    } catch (error) {
-      this.logger.error(`Error emitting event ${eventType}:`, error);
-      
-      // Emit error event (prevent infinite loop by checking event type)
-      if (eventType !== EventType.SYSTEM_ERROR) {
-        await this.emitter.emit(EventType.SYSTEM_ERROR, {
-          error: error instanceof Error ? error.message : 'Unknown error',
-          originalEvent: eventType,
-          timestamp: new Date(),
-        });
-      }
-    }
-  }
-
-  /**
-   * Add middleware
-   */
-  public addMiddleware(middleware: (event: Event) => Promise<Event | null>): void {
-    this.middleware.push(middleware);
-    this.logger.debug('Event middleware added');
-  }
-
-  /**
-   * Remove middleware
-   */
-  public removeMiddleware(middleware: (event: Event) => Promise<Event | null>): boolean {
-    const index = this.middleware.indexOf(middleware);
-    if (index !== -1) {
-      this.middleware.splice(index, 1);
-      this.logger.debug('Event middleware removed');
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Get event listeners
-   */
-  public getListeners(eventType: string | EventType): any[] {
-    return this.emitter.getListeners(eventType as string);
-  }
-
-  /**
-   * Get all event types
-   */
-  public getEventTypes(): string[] {
-    return this.emitter.getEventTypes();
-  }
-
-  /**
-   * Get listener count
-   */
-  public getListenerCount(eventType?: string | EventType): number {
-    return this.emitter.getListenerCount(eventType as string);
-  }
-
-  /**
-   * Get event statistics
-   */
-  public getStats(): EventStats {
-    return this.emitter.getStats();
-  }
-
-  /**
-   * Get event history
-   */
-  public getHistory(filter?: EventFilter, limit?: number): EventHistory[] {
-    let history = this.emitter.getHistory(limit);
-
-    if (filter) {
-      history = history.filter(entry => {
-        if (filter.types && !filter.types.includes(entry.event.type)) {
-          return false;
-        }
-        if (filter.source && entry.event.metadata.source !== filter.source) {
-          return false;
-        }
-        if (filter.dateFrom && entry.processedAt < filter.dateFrom) {
-          return false;
-        }
-        if (filter.dateTo && entry.processedAt > filter.dateTo) {
-          return false;
-        }
-        if (filter.hasErrors !== undefined && (entry.errors.length > 0) !== filter.hasErrors) {
-          return false;
-        }
-        return true;
-      });
-    }
-
-    return history;
-  }
-
-  /**
-   * Clear event history
-   */
-  public clearHistory(): void {
-    this.emitter.clearHistory();
-  }
-
-  /**
-   * Wait for event
-   */
-  public waitFor(
-    eventType: string | EventType,
-    timeout: number = 5000,
-    condition?: (event: Event) => boolean
-  ): Promise<Event> {
-    return new Promise((resolve, reject) => {
-      let listenerId: string;
-      const timer = setTimeout(() => {
-        this.off(eventType, listenerId);
-        reject(new Error(`Timeout waiting for event: ${eventType}`));
-      }, timeout);
-
-      listenerId = this.once(eventType, (event) => {
-        if (!condition || condition(event)) {
-          clearTimeout(timer);
-          resolve(event);
-        }
-      });
-    });
-  }
-
-  /**
-   * Flush pending events
-   */
-  public async flush(): Promise<void> {
-    // Wait for queue to empty
-    while (this.emitter.getQueueSize() > 0) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
+    return await this.config.get('events', this.defaultConfig);
   }
 
   /**
    * Setup middleware
    */
   private setupMiddleware(config: EventManagerConfig['middleware']): void {
-    if (!config.enabled) return;
+    if (!config.enabled) {
+      return;
+    }
 
     // Validation middleware
     if (config.validatePayload) {
-      this.addMiddleware(async (event) => {
-        // Basic payload validation
-        if (typeof event.payload !== 'object' || event.payload === null) {
-          this.logger.warn(`Invalid event payload for ${event.type}`);
-          return null;
+      this.middleware.push(async (event: Event) => {
+        if (!event.type || !event.payload) {
+          throw new Error('Invalid event: missing type or payload');
         }
         return event;
       });
@@ -482,25 +227,18 @@ export class EventManager {
 
     // Sanitization middleware
     if (config.sanitizePayload) {
-      this.addMiddleware(async (event) => {
-        // Basic payload sanitization
-        try {
-          const sanitized = JSON.parse(JSON.stringify(event.payload));
-          return { ...event, payload: sanitized };
-        } catch {
-          this.logger.warn(`Failed to sanitize payload for ${event.type}`);
-          return event;
-        }
+      this.middleware.push(async (event: Event) => {
+        // Add sanitization logic here if needed
+        return event;
       });
     }
 
     // Logging middleware
     if (config.logEvents) {
-      this.addMiddleware(async (event) => {
-        this.logger.debug(`Event: ${event.type}`, {
-          correlationId: event.metadata.correlationId,
-          source: event.metadata.source,
-          payloadKeys: Object.keys(event.payload),
+      this.middleware.push(async (event: Event) => {
+        this.logger.debug(`Event emitted: ${event.type}`, {
+          payload: event.payload,
+          metadata: event.metadata,
         });
         return event;
       });
@@ -508,9 +246,11 @@ export class EventManager {
   }
 
   /**
-   * Setup core event listeners
+   * Setup core system event listeners
    */
   private async setupCoreEventListeners(): Promise<void> {
+    this.logger.debug('Setting up core event listeners...');
+
     // System error listener
     this.on(EventType.SYSTEM_ERROR, async (event) => {
       this.logger.error('System error event:', event.payload);
@@ -591,19 +331,9 @@ export class EventManager {
    */
   private async setupRedisPersistence(options: Record<string, any>): Promise<void> {
     try {
-      const redisUrl = options.url || process.env.REDIS_URL || 'redis://localhost:6379';
-      
       this.redisClient = createClient({
-        url: redisUrl,
+        url: options.url || process.env.REDIS_URL || 'redis://localhost:6379',
         ...options,
-      });
-
-      this.redisClient.on('error', (error) => {
-        this.logger.error('Redis persistence error:', error);
-      });
-
-      this.redisClient.on('connect', () => {
-        this.logger.debug('Redis persistence connected');
       });
 
       await this.redisClient.connect();
@@ -620,11 +350,12 @@ export class EventManager {
    */
   private async setupFilePersistence(options: Record<string, any>): Promise<void> {
     try {
-      const logDir = options.directory || './logs/events';
-      this.fileLogPath = path.join(logDir, 'events.log');
+      this.fileLogPath = options.path || path.join(process.cwd(), 'logs', 'events.log');
       
-      // Ensure log directory exists
-      await fs.ensureDir(logDir);
+      // Ensure directory exists
+      if (this.fileLogPath) {
+        await fs.ensureDir(path.dirname(this.fileLogPath));
+      }
       
       this.logger.debug(`File event persistence initialized: ${this.fileLogPath}`);
     } catch (error) {
@@ -634,7 +365,7 @@ export class EventManager {
   }
 
   /**
-   * Setup event broadcasting
+   * Setup broadcasting
    */
   private async setupBroadcasting(config: EventManagerConfig['broadcasting']): Promise<void> {
     this.logger.info(`Setting up event broadcasting: ${config.adapter}`);
@@ -642,10 +373,10 @@ export class EventManager {
     try {
       switch (config.adapter) {
         case 'redis':
-          await this.setupRedisBroadcasting(config);
+          await this.setupRedisBroadcasting(config.channels);
           break;
         case 'websocket':
-          await this.setupWebSocketBroadcasting(config);
+          await this.setupWebSocketBroadcasting(config.channels);
           break;
         default:
           throw new Error(`Unsupported broadcasting adapter: ${config.adapter}`);
@@ -661,23 +392,15 @@ export class EventManager {
   /**
    * Setup Redis broadcasting
    */
-  private async setupRedisBroadcasting(config: EventManagerConfig['broadcasting']): Promise<void> {
+  private async setupRedisBroadcasting(channels: string[]): Promise<void> {
     try {
-      const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-      
-      this.broadcastRedisClient = createClient({ url: redisUrl });
-
-      this.broadcastRedisClient.on('error', (error) => {
-        this.logger.error('Redis broadcasting error:', error);
-      });
-
-      this.broadcastRedisClient.on('connect', () => {
-        this.logger.debug('Redis broadcasting connected');
+      this.broadcastRedisClient = createClient({
+        url: process.env.REDIS_URL || 'redis://localhost:6379',
       });
 
       await this.broadcastRedisClient.connect();
       
-      this.logger.debug('Redis event broadcasting initialized');
+      this.logger.debug(`Redis broadcasting initialized for channels: ${channels.join(', ')}`);
     } catch (error) {
       this.logger.error('Failed to setup Redis broadcasting:', error);
       throw error;
@@ -687,25 +410,116 @@ export class EventManager {
   /**
    * Setup WebSocket broadcasting
    */
-  private async setupWebSocketBroadcasting(config: EventManagerConfig['broadcasting']): Promise<void> {
-    try {
-      // WebSocket broadcasting setup would be handled by the main app
-      // This just initializes the client set for tracking connections
-      this.webSocketClients = new Set();
-      
-      this.logger.debug('WebSocket event broadcasting initialized');
-    } catch (error) {
-      this.logger.error('Failed to setup WebSocket broadcasting:', error);
-      throw error;
-    }
+  private async setupWebSocketBroadcasting(channels: string[]): Promise<void> {
+    // WebSocket broadcasting setup would go here
+    this.logger.debug(`WebSocket broadcasting initialized for channels: ${channels.join(', ')}`);
   }
+
+  // ===================================================================
+  // EVENT OPERATIONS
+  // ===================================================================
+
+  /**
+   * Emit an event
+   */
+  public async emit(type: string, payload?: EventPayload, metadata?: Partial<EventMetadata>): Promise<void> {
+    const event: Event = {
+      type,
+      payload: payload || {},
+      metadata: {
+        timestamp: new Date(),
+        source: 'system',
+        version: '1.0.0',
+        ...metadata,
+      },
+    };
+
+    // Apply middleware
+    let processedEvent: Event | null = event;
+    for (const middleware of this.middleware) {
+      processedEvent = await middleware(processedEvent);
+      if (!processedEvent) {
+        return; // Event was filtered out
+      }
+    }
+
+    // Emit through EventEmitter
+    await this.emitter.emit(type, processedEvent);
+
+    // Persist event if enabled
+    await this.persistEvent(processedEvent);
+
+    // Broadcast event if enabled
+    await this.broadcastEvent(processedEvent);
+  }
+
+  /**
+   * Listen to an event
+   */
+  public on(type: string, callback: EventCallback, options?: EventListenerOptions): void {
+    this.emitter.on(type, callback, options);
+  }
+
+  /**
+   * Listen to an event once
+   */
+  public once(type: string, callback: EventCallback, options?: EventListenerOptions): void {
+    this.emitter.once(type, callback, options);
+  }
+
+  /**
+   * Remove event listener
+   * @param type Event type
+   * @param listenerId The ID of the listener to remove
+   */
+  public off(type: string, listenerId: string): void {
+    this.emitter.off(type, listenerId);
+  }
+
+  /**
+   * Remove all listeners for an event type
+   */
+  public removeAllListeners(type?: string): void {
+    this.emitter.removeAllListeners(type);
+  }
+
+  /**
+   * Get event statistics
+   */
+  public getStats(): EventStats {
+    return this.emitter.getStats();
+  }
+
+  /**
+   * Get event history
+   */
+  public getHistory(limit?: number): EventHistory[] {
+    return this.emitter.getHistory(limit);
+  }
+
+  /**
+   * Clear event history
+   */
+  public clearHistory(): void {
+    this.emitter.clearHistory();
+  }
+
+  // ===================================================================
+  // PERSISTENCE OPERATIONS
+  // ===================================================================
 
   /**
    * Persist event
    */
   private async persistEvent(event: Event): Promise<void> {
-    const config = await this.config.get('events', this.defaultConfig);
-    if (!config.persistence.enabled) return;
+    if (!this.config) {
+      return;
+    }
+
+    const config = await this.getConfig();
+    if (!config.persistence.enabled) {
+      return;
+    }
 
     try {
       switch (config.persistence.adapter) {
@@ -720,16 +534,17 @@ export class EventManager {
           break;
       }
     } catch (error) {
-      this.logger.error(`Failed to persist event ${event.type}:`, error);
-      // Don't throw to avoid breaking event emission
+      this.logger.error('Failed to persist event:', error);
     }
   }
 
   /**
-   * Persist event to MongoDB
+   * Persist to MongoDB
    */
   private async persistToMongodb(event: Event): Promise<void> {
-    if (!this.eventLogModel) return;
+    if (!this.eventLogModel) {
+      return;
+    }
 
     try {
       await this.eventLogModel.create({
@@ -745,53 +560,53 @@ export class EventManager {
   }
 
   /**
-   * Persist event to Redis
+   * Persist to Redis
    */
   private async persistToRedis(event: Event): Promise<void> {
-    if (!this.redisClient) return;
+    if (!this.redisClient) {
+      return;
+    }
 
     try {
-      const eventKey = `event:${event.type}:${event.metadata.correlationId}`;
-      const eventData = JSON.stringify({
-        ...event,
-        persistedAt: new Date(),
-      });
-
-      // Store event with TTL (30 days)
-      await this.redisClient.setEx(eventKey, 30 * 24 * 60 * 60, eventData);
-
-      // Add to event type list for querying
-      await this.redisClient.lPush(`events:${event.type}`, eventKey);
-      await this.redisClient.lTrim(`events:${event.type}`, 0, 1000); // Keep last 1000 events
+      const key = `events:${event.type}:${Date.now()}`;
+      await this.redisClient.set(key, JSON.stringify(event), { EX: 86400 }); // 24 hours TTL
     } catch (error) {
       this.logger.error('Failed to persist event to Redis:', error);
     }
   }
 
   /**
-   * Persist event to file
+   * Persist to file
    */
   private async persistToFile(event: Event): Promise<void> {
-    if (!this.fileLogPath) return;
+    if (!this.fileLogPath) {
+      return;
+    }
 
     try {
-      const logEntry = {
-        ...event,
-        persistedAt: new Date(),
-      };
-
-      await fs.appendFile(this.fileLogPath, JSON.stringify(logEntry) + '\n');
+      const logEntry = `${JSON.stringify(event)}\n`;
+      await fs.appendFile(this.fileLogPath, logEntry);
     } catch (error) {
       this.logger.error('Failed to persist event to file:', error);
     }
   }
 
+  // ===================================================================
+  // BROADCASTING OPERATIONS
+  // ===================================================================
+
   /**
    * Broadcast event
    */
   private async broadcastEvent(event: Event): Promise<void> {
-    const config = await this.config.get('events', this.defaultConfig);
-    if (!config.broadcasting.enabled) return;
+    if (!this.config) {
+      return;
+    }
+
+    const config = await this.getConfig();
+    if (!config.broadcasting.enabled) {
+      return;
+    }
 
     try {
       switch (config.broadcasting.adapter) {
@@ -799,72 +614,83 @@ export class EventManager {
           await this.broadcastToRedis(event, config.broadcasting.channels);
           break;
         case 'websocket':
-          await this.broadcastToWebSocket(event);
+          await this.broadcastToWebSocket(event, config.broadcasting.channels);
           break;
       }
     } catch (error) {
-      this.logger.error(`Failed to broadcast event ${event.type}:`, error);
-      // Don't throw to avoid breaking event emission
+      this.logger.error('Failed to broadcast event:', error);
     }
   }
 
   /**
-   * Broadcast event to Redis
+   * Broadcast to Redis
    */
   private async broadcastToRedis(event: Event, channels: string[]): Promise<void> {
-    if (!this.broadcastRedisClient) return;
+    if (!this.broadcastRedisClient) {
+      return;
+    }
 
     try {
-      const broadcastData = JSON.stringify({
-        ...event,
-        broadcastAt: new Date(),
-      });
-
-      // Publish to all configured channels
       for (const channel of channels) {
-        await this.broadcastRedisClient.publish(channel, broadcastData);
+        await this.broadcastRedisClient.publish(channel, JSON.stringify(event));
       }
-
-      // Also publish to event-specific channel
-      await this.broadcastRedisClient.publish(`event:${event.type}`, broadcastData);
     } catch (error) {
       this.logger.error('Failed to broadcast event to Redis:', error);
     }
   }
 
   /**
-   * Broadcast event to WebSocket
+   * Broadcast to WebSocket
    */
-  private async broadcastToWebSocket(event: Event): Promise<void> {
-    if (this.webSocketClients.size === 0) return;
-
+  private async broadcastToWebSocket(event: Event, channels: string[]): Promise<void> {
     try {
-      const broadcastData = JSON.stringify({
-        ...event,
-        broadcastAt: new Date(),
-      });
-
-      // Send to all connected WebSocket clients
-      const deadClients = new Set();
+      const message = JSON.stringify({ channels, event });
       
       for (const client of this.webSocketClients) {
-        try {
-          if (client.readyState === 1) { // WebSocket.OPEN
-            client.send(broadcastData);
-          } else {
-            deadClients.add(client);
-          }
-        } catch (error) {
-          deadClients.add(client);
+        if (client.readyState === 1) { // WebSocket.OPEN
+          client.send(message);
         }
-      }
-
-      // Clean up dead connections
-      for (const deadClient of deadClients) {
-        this.webSocketClients.delete(deadClient);
       }
     } catch (error) {
       this.logger.error('Failed to broadcast event to WebSocket:', error);
+    }
+  }
+
+  // ===================================================================
+  // LIFECYCLE MANAGEMENT
+  // ===================================================================
+
+  /**
+   * Shutdown event manager
+   */
+  public async shutdown(): Promise<void> {
+    this.logger.info('Shutting down Event Manager...');
+
+    try {
+      // Close Redis connections
+      if (this.redisClient) {
+        await this.redisClient.disconnect();
+      }
+      
+      if (this.broadcastRedisClient) {
+        await this.broadcastRedisClient.disconnect();
+      }
+
+      // Close WebSocket connections
+      for (const client of this.webSocketClients) {
+        client.close();
+      }
+      this.webSocketClients.clear();
+
+      // Clear all listeners
+      this.emitter.removeAllListeners();
+
+      this.initialized = false;
+      this.logger.info('Event Manager shutdown complete');
+
+    } catch (error) {
+      this.logger.error('Error during Event Manager shutdown:', error);
+      throw error;
     }
   }
 
@@ -873,180 +699,16 @@ export class EventManager {
    */
   public addWebSocketClient(client: any): void {
     this.webSocketClients.add(client);
-    this.logger.debug('WebSocket client added for event broadcasting');
+    
+    client.on('close', () => {
+      this.webSocketClients.delete(client);
+    });
   }
 
   /**
-   * Remove WebSocket client
-   */
-  public removeWebSocketClient(client: any): void {
-    this.webSocketClients.delete(client);
-    this.logger.debug('WebSocket client removed from event broadcasting');
-  }
-
-  /**
-   * Get persisted events from storage
-   */
-  public async getPersistedEvents(filter?: {
-    type?: string;
-    source?: string;
-    dateFrom?: Date;
-    dateTo?: Date;
-    limit?: number;
-    offset?: number;
-  }): Promise<Event[]> {
-    const config = await this.config.get('events', this.defaultConfig);
-    if (!config.persistence.enabled) return [];
-
-    try {
-      switch (config.persistence.adapter) {
-        case 'mongodb':
-          return await this.getEventsFromMongodb(filter);
-        case 'redis':
-          return await this.getEventsFromRedis(filter);
-        case 'file':
-          return await this.getEventsFromFile(filter);
-        default:
-          return [];
-      }
-    } catch (error) {
-      this.logger.error('Failed to get persisted events:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Get events from MongoDB
-   */
-  private async getEventsFromMongodb(filter: any = {}): Promise<Event[]> {
-    if (!this.eventLogModel) return [];
-
-    try {
-      const query: any = {};
-      
-      if (filter.type) query.type = filter.type;
-      if (filter.source) query['metadata.source'] = filter.source;
-      if (filter.dateFrom || filter.dateTo) {
-        query['metadata.timestamp'] = {};
-        if (filter.dateFrom) query['metadata.timestamp'].$gte = filter.dateFrom;
-        if (filter.dateTo) query['metadata.timestamp'].$lte = filter.dateTo;
-      }
-
-      const events = await this.eventLogModel
-        .find(query)
-        .sort({ 'metadata.timestamp': -1 })
-        .limit(filter.limit || 100)
-        .skip(filter.offset || 0);
-
-      return events.map(event => ({
-        type: event.type,
-        payload: event.payload,
-        metadata: event.metadata,
-      }));
-    } catch (error) {
-      this.logger.error('Failed to get events from MongoDB:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Get events from Redis
-   */
-  private async getEventsFromRedis(filter: any = {}): Promise<Event[]> {
-    if (!this.redisClient) return [];
-
-    try {
-      const events: Event[] = [];
-      const eventType = filter.type || '*';
-      const keys = await this.redisClient.keys(`event:${eventType}:*`);
-      
-      for (const key of keys.slice(0, filter.limit || 100)) {
-        const eventData = await this.redisClient.get(key);
-        if (eventData) {
-          const event = JSON.parse(eventData);
-          
-          // Apply filters
-          if (filter.source && event.metadata.source !== filter.source) continue;
-          if (filter.dateFrom && new Date(event.metadata.timestamp) < filter.dateFrom) continue;
-          if (filter.dateTo && new Date(event.metadata.timestamp) > filter.dateTo) continue;
-          
-          events.push(event);
-        }
-      }
-
-      return events.sort((a, b) => 
-        new Date(b.metadata.timestamp).getTime() - new Date(a.metadata.timestamp).getTime()
-      );
-    } catch (error) {
-      this.logger.error('Failed to get events from Redis:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Get events from file
-   */
-  private async getEventsFromFile(filter: any = {}): Promise<Event[]> {
-    if (!this.fileLogPath) return [];
-
-    try {
-      const content = await fs.readFile(this.fileLogPath, 'utf-8');
-      const lines = content.trim().split('\n').filter(line => line.trim());
-      const events: Event[] = [];
-
-      for (const line of lines) {
-        try {
-          const event = JSON.parse(line);
-          
-          // Apply filters
-          if (filter.type && event.type !== filter.type) continue;
-          if (filter.source && event.metadata.source !== filter.source) continue;
-          if (filter.dateFrom && new Date(event.metadata.timestamp) < filter.dateFrom) continue;
-          if (filter.dateTo && new Date(event.metadata.timestamp) > filter.dateTo) continue;
-          
-          events.push(event);
-        } catch (parseError) {
-          // Skip invalid JSON lines
-          continue;
-        }
-      }
-
-      return events
-        .sort((a, b) => 
-          new Date(b.metadata.timestamp).getTime() - new Date(a.metadata.timestamp).getTime()
-        )
-        .slice(filter.offset || 0, (filter.offset || 0) + (filter.limit || 100));
-    } catch (error) {
-      this.logger.error('Failed to get events from file:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Generate correlation ID for event tracking
-   */
-  private generateCorrelationId(): string {
-    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  /**
-   * Check if initialized
+   * Get initialization status
    */
   public isInitialized(): boolean {
     return this.initialized;
-  }
-
-  /**
-   * Get emitter instance
-   */
-  public getEmitter(): EventEmitter {
-    return this.emitter;
-  }
-
-  /**
-   * Get event log model (for external usage)
-   */
-  public getEventLogModel(): Model<IEventLog> | null {
-    return this.eventLogModel;
   }
 }

@@ -54,7 +54,7 @@ export interface ConfigSchema {
 export class ConfigManager extends EventEmitter {
   private static instance: ConfigManager;
   private logger: Logger;
-  private events: EventManager;
+  private events: EventManager | null = null; // CHANGED: Defer initialization
   private envConfig: EnvConfigManager;
   private settingsRepo?: SettingsRepository;
   private cache = new Map<string, ConfigValue>();
@@ -76,7 +76,7 @@ export class ConfigManager extends EventEmitter {
   private constructor(options?: Partial<ConfigManagerOptions>) {
     super();
     this.logger = new Logger('ConfigManager');
-    this.events = EventManager.getInstance();
+    // CHANGED: Don't initialize EventManager in constructor
     this.envConfig = EnvConfigManager.getInstance();
     this.options = { ...this.defaultOptions, ...options };
     
@@ -103,6 +103,9 @@ export class ConfigManager extends EventEmitter {
     try {
       this.logger.info('Initializing Configuration Manager...');
 
+      // CHANGED: Initialize EventManager here instead of in constructor
+      this.events = EventManager.getInstance();
+
       // Initialize environment configuration
       this.envConfig.initialize();
 
@@ -121,11 +124,13 @@ export class ConfigManager extends EventEmitter {
 
       this.initialized = true;
 
-      // Emit initialization event
-      await this.events.emit(EventType.CMS_CONFIG_CHANGED, {
-        type: 'config_manager_initialized',
-        timestamp: new Date(),
-      });
+      // Emit initialization event only if EventManager is initialized
+      if (this.events && this.events.isInitialized()) {
+        await this.events.emit(EventType.CMS_CONFIG_CHANGED, {
+          type: 'config_manager_initialized',
+          timestamp: new Date(),
+        });
+      }
 
       this.logger.info('Configuration Manager initialized successfully', {
         cacheEnabled: this.options.cacheEnabled,
@@ -234,6 +239,7 @@ export class ConfigManager extends EventEmitter {
           
         case 'database':
           if (this.settingsRepo) {
+            // Use setSetting which handles both create and update
             await this.settingsRepo.setSetting(key, value);
           } else {
             throw new Error('Database configuration requires settings repository');
@@ -252,20 +258,22 @@ export class ConfigManager extends EventEmitter {
       // Notify watchers
       this.notifyWatchers(key, value);
 
-      // Emit change event
-      const change: ConfigChange = {
-        key,
-        oldValue,
-        newValue: value,
-        source,
-        timestamp: new Date(),
-      };
+      // Emit change event only if EventManager is available and initialized
+      if (this.events && this.events.isInitialized()) {
+        const change: ConfigChange = {
+          key,
+          oldValue,
+          newValue: value,
+          source,
+          timestamp: new Date(),
+        };
 
-      await this.events.emit(EventType.CMS_CONFIG_CHANGED, {
-        type: 'config_value_changed',
-        change,
-        timestamp: new Date(),
-      });
+        await this.events.emit(EventType.CMS_CONFIG_CHANGED, {
+          type: 'config_value_changed',
+          change,
+          timestamp: new Date(),
+        });
+      }
 
       this.logger.debug('Configuration updated', {
         key,
@@ -284,87 +292,83 @@ export class ConfigManager extends EventEmitter {
    */
   public async getMany(keys: string[]): Promise<Record<string, any>> {
     const result: Record<string, any> = {};
-
-    await Promise.all(
-      keys.map(async (key) => {
-        try {
-          result[key] = await this.get(key);
-        } catch (error) {
-          this.logger.warn(`Failed to get configuration '${key}':`, error);
-          result[key] = undefined;
-        }
-      })
-    );
-
+    
+    for (const key of keys) {
+      try {
+        result[key] = await this.get(key);
+      } catch (error) {
+        this.logger.warn(`Failed to get configuration '${key}':`, error);
+        result[key] = undefined;
+      }
+    }
+    
     return result;
   }
 
   /**
-   * Get configuration by prefix
+   * Set multiple configuration values
    */
-  public async getByPrefix(prefix: string): Promise<Record<string, any>> {
-    const result: Record<string, any> = {};
+  public async setMany(values: Record<string, any>, source: ConfigSource = 'override'): Promise<void> {
+    const promises = Object.entries(values).map(([key, value]) => 
+      this.set(key, value, source)
+    );
+    
+    await Promise.all(promises);
+  }
 
-    // Check overrides
-    for (const [key, value] of this.overrides.entries()) {
-      if (key.startsWith(prefix)) {
-        result[key] = value;
+  /**
+   * Delete configuration value
+   */
+  public async delete(key: string): Promise<void> {
+    try {
+      // Remove from overrides
+      this.overrides.delete(key);
+
+      // Remove from database if available
+      if (this.settingsRepo) {
+        await this.settingsRepo.deleteSetting(key);
       }
-    }
 
-    // Check environment variables
-    const envConfig = this.envConfig.getConfig();
-    for (const [key, value] of Object.entries(envConfig)) {
-      const configKey = this.envKeyToConfigKey(key);
-      if (configKey.startsWith(prefix)) {
-        result[configKey] = value;
-      }
-    }
+      // Remove from cache
+      this.cache.delete(key);
+      this.cacheExpiry.delete(key);
 
-    // Check database settings
-    if (this.settingsRepo) {
-      try {
-        const dbSettings = await this.settingsRepo.findMany({
-          key: { $regex: `^${prefix.replace(/\./g, '\\.')}` }
+      // Notify watchers
+      this.notifyWatchers(key, undefined);
+
+      // Emit change event only if EventManager is available and initialized
+      if (this.events && this.events.isInitialized()) {
+        await this.events.emit(EventType.CMS_CONFIG_CHANGED, {
+          type: 'config_value_deleted',
+          key,
+          timestamp: new Date(),
         });
-
-        for (const setting of dbSettings) {
-          if (!result.hasOwnProperty(setting.key)) {
-            result[setting.key] = setting.value;
-          }
-        }
-      } catch (error) {
-        this.logger.warn('Failed to get database settings by prefix:', error);
       }
-    }
 
-    // Check default configuration
-    const defaultValues = this.getDefaultValuesByPrefix(prefix);
-    for (const [key, value] of Object.entries(defaultValues)) {
-      if (!result.hasOwnProperty(key)) {
-        result[key] = value;
-      }
-    }
+      this.logger.debug('Configuration deleted', { key });
 
-    return result;
+    } catch (error) {
+      this.logger.error(`Error deleting configuration '${key}':`, error);
+      throw error;
+    }
   }
 
   /**
    * Watch for configuration changes
    */
-  public watch(key: string, callback: (value: any, oldValue?: any) => void): () => void {
+  public watch(key: string, callback: (value: any) => void): () => void {
     if (!this.watchers.has(key)) {
       this.watchers.set(key, new Set());
     }
     
     this.watchers.get(key)!.add(callback);
-
+    
     // Return unwatch function
     return () => {
-      const keyWatchers = this.watchers.get(key);
-      if (keyWatchers) {
-        keyWatchers.delete(callback);
-        if (keyWatchers.size === 0) {
+      const watchers = this.watchers.get(key);
+      if (watchers) {
+        watchers.delete(callback);
+        if (watchers.size === 0) {
           this.watchers.delete(key);
         }
       }
@@ -372,31 +376,283 @@ export class ConfigManager extends EventEmitter {
   }
 
   /**
-   * Remove configuration override
+   * Check if configuration exists
    */
-  public removeOverride(key: string): void {
-    if (this.overrides.has(key)) {
-      this.overrides.delete(key);
-      
-      // Clear cache for this key
-      this.cache.delete(key);
-      this.cacheExpiry.delete(key);
-
-      this.logger.debug(`Configuration override removed: ${key}`);
+  public async has(key: string): Promise<boolean> {
+    try {
+      const value = await this.get(key);
+      return value !== undefined;
+    } catch {
+      return false;
     }
   }
 
   /**
-   * Clear all overrides
+   * Get all configuration keys
    */
-  public clearOverrides(): void { 
-    this.overrides.clear();
-    this.clearCache();
-    this.logger.debug('All configuration overrides cleared');
+  public async getKeys(): Promise<string[]> {
+    const keys = new Set<string>();
+    
+    // Add override keys
+    for (const key of this.overrides.keys()) {
+      keys.add(key);
+    }
+    
+    // Add environment keys - get from the actual config object
+    try {
+      const envConfig = this.envConfig.getConfig();
+      for (const envKey of Object.keys(envConfig)) {
+        // Convert environment key to config key format
+        const configKey = this.envKeyToConfigKey(envKey);
+        keys.add(configKey);
+      }
+    } catch (error) {
+      this.logger.debug('Failed to get environment configuration keys:', error);
+    }
+    
+    // Add default config keys
+    for (const key of Object.keys(defaultConfig)) {
+      keys.add(key);
+    }
+    
+    // Add database keys if available
+    if (this.settingsRepo) {
+      try {
+        // Get all settings and extract keys
+        const allSettings = await this.settingsRepo.findMany({});
+        for (const setting of allSettings) {
+          keys.add(setting.key);
+        }
+      } catch (error) {
+        this.logger.warn('Failed to get database configuration keys:', error);
+      }
+    }
+    
+    return Array.from(keys);
+  }
+
+  // ===================================================================
+  // PRIVATE METHODS
+  // ===================================================================
+
+  /**
+   * Resolve configuration value based on priority order
+   */
+  private async resolveValue(key: string): Promise<any> {
+    for (const source of this.options.priorityOrder) {
+      const value = await this.getValueFromSource(key, source);
+      if (value !== undefined) {
+        return value;
+      }
+    }
+    return undefined;
   }
 
   /**
-   * Clear configuration cache
+   * Get value from specific source
+   */
+  private async getValueFromSource(key: string, source: ConfigSource): Promise<any> {
+    switch (source) {
+      case 'override':
+        return this.overrides.get(key);
+        
+      case 'database':
+        if (this.settingsRepo) {
+          try {
+            const setting = await this.settingsRepo.getSetting(key);
+            return setting; // getSetting returns the value directly or null
+          } catch (error) {
+            this.logger.debug(`Database config error for '${key}':`, error);
+            return undefined;
+          }
+        }
+        return undefined;
+        
+      case 'environment':
+        return this.getEnvironmentValue(key);
+        
+      case 'default':
+        return this.getDefaultValue(key);
+        
+      default:
+        return undefined;
+    }
+  }
+
+  /**
+   * Get cached value
+   */
+  private getCachedValue<T>(key: string): T | undefined {
+    if (!this.options.cacheEnabled) {
+      return undefined;
+    }
+
+    const expiry = this.cacheExpiry.get(key);
+    if (expiry && Date.now() > expiry) {
+      this.cache.delete(key);
+      this.cacheExpiry.delete(key);
+      return undefined;
+    }
+
+    const cached = this.cache.get(key);
+    return cached ? cached.value : undefined;
+  }
+
+  /**
+   * Set cached value
+   */
+  private setCachedValue(key: string, value: any, source: ConfigSource): void {
+    if (!this.options.cacheEnabled) {
+      return;
+    }
+
+    const configValue: ConfigValue = {
+      value,
+      source,
+      lastUpdated: new Date(),
+    };
+
+    this.cache.set(key, configValue);
+    
+    if (this.options.cacheTTL > 0) {
+      this.cacheExpiry.set(key, Date.now() + (this.options.cacheTTL * 1000));
+    }
+  }
+
+  /**
+   * Get environment value
+   */
+  private getEnvironmentValue<T>(key: string): T | undefined {
+    try {
+      const envConfig = this.envConfig.getConfig();
+      const envKey = this.configKeyToEnvKey(key);
+      
+      return envConfig[envKey as keyof EnvConfig] as T;
+    } catch (error) {
+      this.logger.debug(`Failed to get environment value for '${key}':`, error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Get default value
+   */
+  private getDefaultValue<T>(key: string): T | undefined {
+    const keys = key.split('.');
+    let current: any = defaultConfig;
+    
+    for (const k of keys) {
+      if (current && typeof current === 'object' && k in current) {
+        current = current[k];
+      } else {
+        return undefined;
+      }
+    }
+    
+    return current;
+  }
+
+  /**
+   * Notify watchers
+   */
+  private notifyWatchers(key: string, value: any): void {
+    const watchers = this.watchers.get(key);
+    if (watchers) {
+      for (const callback of watchers) {
+        try {
+          callback(value);
+        } catch (error) {
+          this.logger.error(`Error in configuration watcher for '${key}':`, error);
+        }
+      }
+    }
+  }
+
+  /**
+   * Setup hot reload
+   */
+  private async setupHotReload(): Promise<void> {
+    if (!this.settingsRepo) {
+      return;
+    }
+
+    this.logger.debug('Setting up configuration hot reload...');
+
+    // Setup database change listener through events if available
+    try {
+      if (this.events && this.events.isInitialized()) {
+        // Listen for setting change events from the SettingsRepository
+        this.events.on('setting:changed', async (event) => {
+          const { key, newValue } = event.payload;
+          
+          this.logger.debug(`Configuration hot reload: ${key}`);
+          
+          // Update cache
+          if (this.options.cacheEnabled) {
+            this.setCachedValue(key, newValue, 'database');
+          }
+          
+          // Notify watchers
+          this.notifyWatchers(key, newValue);
+          
+          // Emit change event
+          if (this.events && this.events.isInitialized()) {
+            this.events.emit(EventType.CMS_CONFIG_CHANGED, {
+              type: 'config_hot_reload',
+              key,
+              value: newValue,
+              timestamp: new Date(),
+            }).catch(error => {
+              this.logger.error('Error emitting hot reload event:', error);
+            });
+          }
+        });
+
+        // Also listen for setting creation events
+        this.events.on('setting:created', async (event) => {
+          const { key, value } = event.payload;
+          
+          this.logger.debug(`Configuration hot reload (new): ${key}`);
+          
+          // Update cache
+          if (this.options.cacheEnabled) {
+            this.setCachedValue(key, value, 'database');
+          }
+          
+          // Notify watchers
+          this.notifyWatchers(key, value);
+        });
+      }
+    } catch (error) {
+      this.logger.warn('Failed to setup configuration hot reload:', error);
+    }
+  }
+
+  /**
+   * Preload essential configurations
+   */
+  private async preloadConfigurations(): Promise<void> {
+    const essentialKeys = [
+      'database.uri',
+      'cache.enabled',
+      'logging.level',
+      'security.jwt.secret',
+      'events.enabled',
+    ];
+
+    this.logger.debug('Preloading essential configurations...');
+
+    for (const key of essentialKeys) {
+      try {
+        await this.get(key);
+      } catch (error) {
+        this.logger.debug(`Failed to preload configuration '${key}':`, error);
+      }
+    }
+  }
+
+  /**
+   * Clear cache
    */
   public clearCache(): void {
     this.cache.clear();
@@ -407,250 +663,11 @@ export class ConfigManager extends EventEmitter {
   /**
    * Get cache statistics
    */
-  public getCacheStats(): {
-    size: number;
-    hitRate: number;
-    expired: number;
-    keys: string[];
-  } {
-    const now = Date.now();
-    let expired = 0;
-
-    for (const [key, expiry] of this.cacheExpiry.entries()) {
-      if (expiry < now) {
-        expired++;
-      }
-    }
-
+  public getCacheStats(): { size: number; hitRate: number } {
     return {
       size: this.cache.size,
-      hitRate: 0, // Would need to track hits/misses for accurate calculation
-      expired,
-      keys: Array.from(this.cache.keys()),
+      hitRate: 0, // TODO: Implement hit rate tracking
     };
-  }
-
-  /**
-   * Get configuration sources summary
-   */
-  public getSourcesSummary(): {
-    overrides: number;
-    environment: number;
-    database: number;
-    default: number;
-  } {
-    const envConfig = this.envConfig.getConfig();
-    
-    return {
-      overrides: this.overrides.size,
-      environment: Object.keys(envConfig).length,
-      database: 0, // Would need async call to get accurate count
-      default: this.countDefaultKeys(),
-    };
-  }
-
-  /**
-   * Validate configuration schema
-   */
-  public validateSchema(schema: ConfigSchema, config?: Record<string, any>): {
-    valid: boolean;
-    errors: string[];
-  } {
-    const errors: string[] = [];
-    const configToValidate = config || {};
-
-    const validateObject = (obj: any, schemaObj: ConfigSchema, path = ''): void => {
-      for (const [key, rule] of Object.entries(schemaObj)) {
-        const fullPath = path ? `${path}.${key}` : key;
-        const value = obj[key];
-
-        if (typeof rule === 'object' && !('type' in rule)) {
-          // Nested schema
-          if (typeof value === 'object' && value !== null) {
-            validateObject(value, rule as ConfigSchema, fullPath);
-          } else if (value !== undefined) {
-            errors.push(`${fullPath}: Expected object, got ${typeof value}`);
-          }
-        } else {
-          // Validation rule
-          const validationRule = rule as ConfigValidationRule;
-          const error = this.validateValue(value, validationRule, fullPath);
-          if (error) {
-            errors.push(error);
-          }
-        }
-      }
-    };
-
-    validateObject(configToValidate, schema);
-
-    return {
-      valid: errors.length === 0,
-      errors,
-    };
-  }
-
-  /**
-   * Reload configuration from all sources
-   */
-  public async reload(): Promise<void> {
-    try {
-      this.logger.info('Reloading configuration...');
-
-      // Clear cache
-      this.clearCache();
-
-      // Reinitialize environment config
-      this.envConfig.initialize();
-
-      // Preload configurations
-      await this.preloadConfigurations();
-
-      // Emit reload event
-      await this.events.emit(EventType.CMS_CONFIG_CHANGED, {
-        type: 'config_reloaded',
-        timestamp: new Date(),
-      });
-
-      this.logger.info('Configuration reloaded successfully');
-
-    } catch (error) {
-      this.logger.error('Error reloading configuration:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get configuration value from specific source
-   */
-  public async getFromSource<T = any>(key: string, source: ConfigSource): Promise<T | undefined> {
-    switch (source) {
-      case 'override':
-        return this.overrides.get(key) as T;
-        
-      case 'environment':
-        return this.getEnvironmentValue<T>(key);
-        
-      case 'database':
-        if (this.settingsRepo) {
-          return await this.settingsRepo.getSetting(key) as T;
-        }
-        return undefined;
-        
-      case 'default':
-        return this.getDefaultValue<T>(key);
-        
-      default:
-        return undefined;
-    }
-  }
-
-  /**
-   * Resolve configuration value based on priority order
-   */
-  private async resolveValue<T = any>(key: string): Promise<T | undefined> {
-    for (const source of this.options.priorityOrder) {
-      const value = await this.getFromSource<T>(key, source);
-      if (value !== undefined && value !== null) {
-        return value;
-      }
-    }
-    return undefined;
-  }
-
-  /**
-   * Get cached configuration value
-   */
-  private getCachedValue<T>(key: string): T | undefined {
-    const expiry = this.cacheExpiry.get(key);
-    if (expiry && expiry < Date.now()) {
-      // Cache expired
-      this.cache.delete(key);
-      this.cacheExpiry.delete(key);
-      return undefined;
-    }
-
-    const cached = this.cache.get(key);
-    return cached?.value as T;
-  }
-
-  /**
-   * Set cached configuration value
-   */
-  private setCachedValue(key: string, value: any, source: ConfigSource): void {
-    this.cache.set(key, {
-      value,
-      source,
-      lastUpdated: new Date(),
-    });
-    
-    this.cacheExpiry.set(key, Date.now() + (this.options.cacheTTL * 1000));
-  }
-
-  /**
-   * Get environment configuration value
-   */
-  private getEnvironmentValue<T>(key: string): T | undefined {
-    const envConfig = this.envConfig.getConfig();
-    const envKey = this.configKeyToEnvKey(key);
-    
-    return envConfig[envKey as keyof EnvConfig] as T;
-  }
-
-  /**
-   * Get default configuration value
-   */
-  private getDefaultValue<T>(key: string): T | undefined {
-    const keys = key.split('.');
-    let current: any = defaultConfig;
-
-    for (const k of keys) {
-      if (current && typeof current === 'object' && k in current) {
-        current = current[k];
-      } else {
-        return undefined;
-      }
-    }
-
-    return current as T;
-  }
-
-  /**
-   * Get default configuration values by prefix
-   */
-  private getDefaultValuesByPrefix(prefix: string): Record<string, any> {
-    const result: Record<string, any> = {};
-    const keys = prefix.split('.');
-    let current: any = defaultConfig;
-
-    // Navigate to the prefix level
-    for (const key of keys) {
-      if (current && typeof current === 'object' && key in current) {
-        current = current[key];
-      } else {
-        return result;
-      }
-    }
-
-    // Flatten the object
-    const flatten = (obj: any, path = ''): void => {
-      for (const [key, value] of Object.entries(obj)) {
-        const fullPath = path ? `${path}.${key}` : key;
-        const finalPath = prefix ? `${prefix}.${fullPath}` : fullPath;
-
-        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-          flatten(value, fullPath);
-        } else {
-          result[finalPath] = value;
-        }
-      }
-    };
-
-    if (typeof current === 'object' && current !== null) {
-      flatten(current);
-    }
-
-    return result;
   }
 
   /**
@@ -668,238 +685,120 @@ export class ConfigManager extends EventEmitter {
   }
 
   /**
-   * Count default configuration keys
-   */
-  private countDefaultKeys(): number {
-    const countKeys = (obj: any): number => {
-      let count = 0;
-      for (const [, value] of Object.entries(obj)) {
-        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-          count += countKeys(value);
-        } else {
-          count++;
-        }
-      }
-      return count;
-    };
-
-    return countKeys(defaultConfig);
-  }
-
-  /**
-   * Notify configuration watchers
-   */
-  private notifyWatchers(key: string, newValue: any): void {
-    const keyWatchers = this.watchers.get(key);
-    if (keyWatchers) {
-      for (const callback of keyWatchers) {
-        try {
-          callback(newValue);
-        } catch (error) {
-          this.logger.error(`Error in configuration watcher for '${key}':`, error);
-        }
-      }
-    }
-  }
-
-  /**
    * Validate configuration value
    */
-  private validateValue(value: any, rule: ConfigValidationRule, path: string): string | null {
-    // Check if required
-    if (rule.required && (value === undefined || value === null)) {
-      return `${path}: Required value is missing`;
+  public validate(key: string, value: any, schema?: ConfigValidationRule): boolean {
+    if (!schema) {
+      return true; // No validation rule provided
     }
-
-    if (value === undefined || value === null) {
-      return null; // Not required and not provided
-    }
-
-    // Type validation
-    switch (rule.type) {
-      case 'string':
-        if (typeof value !== 'string') {
-          return `${path}: Expected string, got ${typeof value}`;
-        }
-        break;
-        
-      case 'number':
-        if (typeof value !== 'number' || isNaN(value)) {
-          return `${path}: Expected number, got ${typeof value}`;
-        }
-        break;
-        
-      case 'boolean':
-        if (typeof value !== 'boolean') {
-          return `${path}: Expected boolean, got ${typeof value}`;
-        }
-        break;
-        
-      case 'object':
-        if (typeof value !== 'object' || Array.isArray(value)) {
-          return `${path}: Expected object, got ${typeof value}`;
-        }
-        break;
-        
-      case 'array':
-        if (!Array.isArray(value)) {
-          return `${path}: Expected array, got ${typeof value}`;
-        }
-        break;
-        
-      case 'url':
-        if (typeof value !== 'string' || !/^https?:\/\/.+/.test(value)) {
-          return `${path}: Expected valid URL`;
-        }
-        break;
-        
-      case 'email':
-        if (typeof value !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-          return `${path}: Expected valid email`;
-        }
-        break;
-        
-      case 'json':
-        try {
-          if (typeof value === 'string') {
-            JSON.parse(value);
-          }
-        } catch {
-          return `${path}: Expected valid JSON`;
-        }
-        break;
-    }
-
-    // Range validation
-    if (rule.min !== undefined) {
-      if (typeof value === 'number' && value < rule.min) {
-        return `${path}: Value must be at least ${rule.min}`;
-      }
-      if (typeof value === 'string' && value.length < rule.min) {
-        return `${path}: String must be at least ${rule.min} characters`;
-      }
-    }
-
-    if (rule.max !== undefined) {
-      if (typeof value === 'number' && value > rule.max) {
-        return `${path}: Value must be at most ${rule.max}`;
-      }
-      if (typeof value === 'string' && value.length > rule.max) {
-        return `${path}: String must be at most ${rule.max} characters`;
-      }
-    }
-
-    // Pattern validation
-    if (rule.pattern && typeof value === 'string' && !rule.pattern.test(value)) {
-      return `${path}: Value does not match required pattern`;
-    }
-
-    // Enum validation
-    if (rule.enum && !rule.enum.includes(value)) {
-      return `${path}: Value must be one of: ${rule.enum.join(', ')}`;
-    }
-
-    // Custom validation
-    if (rule.custom) {
-      const result = rule.custom(value);
-      if (typeof result === 'string') {
-        return `${path}: ${result}`;
-      }
-      if (result === false) {
-        return `${path}: Custom validation failed`;
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Setup hot reload for database configuration changes
-   */
-  private async setupHotReload(): Promise<void> {
-    if (!this.settingsRepo) return;
 
     try {
-      // Listen for setting changes
-      this.events.on('setting:changed', async (event) => {
-        const { key, newValue } = event.payload;
-        
-        // Update cache
-        if (this.options.cacheEnabled) {
-          this.setCachedValue(key, newValue, 'database');
+      // Type validation
+      switch (schema.type) {
+        case 'string':
+          if (typeof value !== 'string') return false;
+          break;
+        case 'number':
+          if (typeof value !== 'number') return false;
+          break;
+        case 'boolean':
+          if (typeof value !== 'boolean') return false;
+          break;
+        case 'object':
+          if (typeof value !== 'object' || value === null) return false;
+          break;
+        case 'array':
+          if (!Array.isArray(value)) return false;
+          break;
+        case 'url':
+          try {
+            new URL(value);
+          } catch {
+            return false;
+          }
+          break;
+        case 'email':
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(value)) return false;
+          break;
+        case 'json':
+          try {
+            JSON.parse(value);
+          } catch {
+            return false;
+          }
+          break;
+      }
+
+      // Required validation
+      if (schema.required && (value === undefined || value === null)) {
+        return false;
+      }
+
+      // Min/Max validation
+      if (schema.min !== undefined) {
+        if (typeof value === 'number' && value < schema.min) return false;
+        if (typeof value === 'string' && value.length < schema.min) return false;
+        if (Array.isArray(value) && value.length < schema.min) return false;
+      }
+
+      if (schema.max !== undefined) {
+        if (typeof value === 'number' && value > schema.max) return false;
+        if (typeof value === 'string' && value.length > schema.max) return false;
+        if (Array.isArray(value) && value.length > schema.max) return false;
+      }
+
+      // Pattern validation
+      if (schema.pattern && typeof value === 'string') {
+        if (!schema.pattern.test(value)) return false;
+      }
+
+      // Enum validation
+      if (schema.enum && !schema.enum.includes(value)) {
+        return false;
+      }
+
+      // Custom validation
+      if (schema.custom) {
+        const result = schema.custom(value);
+        if (typeof result === 'boolean') {
+          return result;
+        } else if (typeof result === 'string') {
+          return false; // Custom validation failed with error message
         }
+      }
 
-        // Notify watchers
-        this.notifyWatchers(key, newValue);
-
-        this.logger.debug(`Configuration hot-reloaded: ${key}`);
-      });
-
-      this.logger.debug('Configuration hot reload enabled');
+      return true;
 
     } catch (error) {
-      this.logger.warn('Failed to setup configuration hot reload:', error);
+      this.logger.error(`Validation error for '${key}':`, error);
+      return false;
     }
   }
 
   /**
-   * Preload essential configurations
+   * Get initialization status
    */
-  private async preloadConfigurations(): Promise<void> {
-    const essentialKeys = [
-      'site.title',
-      'site.description',
-      'site.url',
-      'auth.jwt.secret',
-      'cache.enabled',
-      'plugins.enabled',
-    ];
+  public isInitialized(): boolean {
+    return this.initialized;
+  }
 
-    await Promise.all(
-      essentialKeys.map(async (key) => {
-        try {
-          await this.get(key);
-        } catch (error) {
-          this.logger.warn(`Failed to preload configuration '${key}':`, error);
-        }
-      })
-    );
+  /**
+   * Shutdown configuration manager
+   */
+  public async shutdown(): Promise<void> {
+    this.logger.info('Shutting down Configuration Manager...');
 
-    this.logger.debug(`Preloaded ${essentialKeys.length} essential configurations`);
+    // Clear all watchers
+    this.watchers.clear();
+
+    // Clear cache
+    this.clearCache();
+
+    // Clear overrides
+    this.overrides.clear();
+
+    this.initialized = false;
+    this.logger.info('Configuration Manager shutdown complete');
   }
 }
-
-/**
- * Default configuration manager instance
- */
-export const configManager = ConfigManager.getInstance();
-
-/**
- * Get configuration value
- */
-export async function getConfig<T = any>(key: string, defaultValue?: T): Promise<T> {
-  return configManager.get(key, defaultValue);
-}
-
-/**
- * Get configuration value synchronously
- */
-export function getConfigSync<T = any>(key: string, defaultValue?: T): T {
-  return configManager.getSync(key, defaultValue);
-}
-
-/**
- * Set configuration value
- */
-export async function setConfig(key: string, value: any, source: ConfigSource = 'override'): Promise<void> {
-  return configManager.set(key, value, source);
-}
-
-/**
- * Watch for configuration changes
- */
-export function watchConfig(key: string, callback: (value: any, oldValue?: any) => void): () => void {
-  return configManager.watch(key, callback);
-}
-
-export default ConfigManager;

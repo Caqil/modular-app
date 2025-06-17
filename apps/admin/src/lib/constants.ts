@@ -1,82 +1,78 @@
-export {
-  UserRole,
-  UserStatus,
+import { 
   ContentStatus,
   ContentType,
-} from '@modular-app/core';
+  UserRole,
+  UserStatus,
+  type IUser,
+  type IPost
+} from '@modular-app/core/client'; // Use client entry point
 
-// Admin-specific constants
 export const ADMIN_CONSTANTS = {
-  // UI Configuration
-  SIDEBAR_WIDTH: 280,
-  HEADER_HEIGHT: 64,
-  TOAST_DURATION: 5000,
-  ANIMATION_DURATION: 200,
+  // App metadata
+  APP: {
+    NAME: 'Modular App Admin',
+    VERSION: '1.0.0',
+    DESCRIPTION: 'Modern Content Management System Administration Panel',
+  },
 
-  // Pagination
-  DEFAULT_PAGE_SIZE: 20,
-  MAX_PAGE_SIZE: 100,
-  PAGE_SIZE_OPTIONS: [10, 20, 50, 100],
-
-  // File Upload Limits
-  MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
-  MAX_IMAGE_SIZE: 5 * 1024 * 1024, // 5MB
-  ALLOWED_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-  ALLOWED_DOCUMENT_TYPES: [
-    'application/pdf',
-    'text/plain',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  ],
-
-  // Cache Keys
-  CACHE_KEYS: {
-    USER_STATS: 'admin:user:stats',
-    CONTENT_STATS: 'admin:content:stats',
-    PLUGIN_LIST: 'admin:plugins:list',
-    SETTINGS: 'admin:settings',
-    DASHBOARD_DATA: 'admin:dashboard:data',
-  } as const,
-
-  // Admin Routes
+  // Routes
   ROUTES: {
     DASHBOARD: '/admin',
-    USERS: '/admin/users',
-    CONTENT: '/admin/content',
-    POSTS: '/admin/content/posts',
-    PAGES: '/admin/content/pages',
+    POSTS: '/admin/posts',
+    PAGES: '/admin/pages',
     MEDIA: '/admin/media',
+    USERS: '/admin/users',
+    COMMENTS: '/admin/comments',
+    CATEGORIES: '/admin/categories',
+    TAGS: '/admin/tags',
     PLUGINS: '/admin/plugins',
+    THEMES: '/admin/themes',
     SETTINGS: '/admin/settings',
-    PROFILE: '/admin/profile',
     ANALYTICS: '/admin/analytics',
-  } as const,
+    PROFILE: '/admin/profile',
+    LOGIN: '/admin/login',
+    LOGOUT: '/admin/logout',
+  },
+
+  // Content statuses from core (client-safe)
+  CONTENT_STATUS: ContentStatus,
+  CONTENT_TYPE: ContentType,
+  USER_ROLE: UserRole,
+  USER_STATUS: UserStatus,
 
   // Permissions
   PERMISSIONS: {
-    MANAGE_USERS: 'manage_users',
-    MANAGE_CONTENT: 'manage_content',
-    MANAGE_MEDIA: 'manage_media',
-    MANAGE_PLUGINS: 'manage_plugins',
-    MANAGE_SETTINGS: 'manage_settings',
-    VIEW_ANALYTICS: 'view_analytics',
-    MANAGE_COMMENTS: 'manage_comments',
-    MODERATE_CONTENT: 'moderate_content',
-  } as const,
+    MANAGE_CONTENT: 'content:manage',
+    MANAGE_USERS: 'users:manage',
+    MANAGE_COMMENTS: 'comments:manage',
+    MANAGE_MEDIA: 'media:manage',
+    MANAGE_PLUGINS: 'plugins:manage',
+    MANAGE_THEMES: 'themes:manage',
+    MANAGE_SETTINGS: 'settings:manage',
+    VIEW_ANALYTICS: 'analytics:view',
+  },
 
-  // Status Colors for UI
-  STATUS_COLORS: {
-    success: 'bg-green-100 text-green-800',
-    error: 'bg-red-100 text-red-800',
-    warning: 'bg-yellow-100 text-yellow-800',
-    info: 'bg-blue-100 text-blue-800',
-    neutral: 'bg-gray-100 text-gray-800',
-  } as const,
+  // UI Constants
+  UI: {
+    PAGE_SIZES: [10, 25, 50, 100],
+    DEFAULT_PAGE_SIZE: 25,
+    SIDEBAR_WIDTH: 280,
+    SIDEBAR_COLLAPSED_WIDTH: 80,
+  },
 
-  // Theme Configuration
-  THEMES: {
-    LIGHT: 'light',
-    DARK: 'dark',
-    AUTO: 'auto',
-  } as const,
+  // File upload limits
+  UPLOAD: {
+    MAX_FILE_SIZE: 5 * 1024 * 1024, // 5MB
+    ALLOWED_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+    ALLOWED_DOCUMENT_TYPES: ['application/pdf', 'application/msword'],
+    MAX_FILENAME_LENGTH: 255,
+  },
+
+  // Validation
+  VALIDATION: {
+    MIN_PASSWORD_LENGTH: 8,
+    MAX_TITLE_LENGTH: 255,
+    MAX_EXCERPT_LENGTH: 500,
+    SLUG_PATTERN: /^[a-z0-9-]+$/,
+  },
 } as const;

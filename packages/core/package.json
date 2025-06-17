@@ -43,6 +43,15 @@
     "winston": "^3.11.0",
     "zod": "^3.22.4"
   },
+  "optionalDependencies": {
+    "aws4": "^1.12.0",
+    "aws-crt": "^1.15.0",
+    "mongodb-client-encryption": "^6.0.0",
+    "kerberos": "^2.0.1",
+    "snappy": "^7.2.2",
+    "@mongodb-js/zstd": "^1.1.0",
+    "bson-ext": "^4.0.3"
+  },
   "devDependencies": {
     "@modular-app/config": "workspace:*",
     "@types/bcryptjs": "^2.4.6",
